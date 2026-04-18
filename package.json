@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "webpack --mode production",
-    "dev": "webpack serve",
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
@@ -21,20 +22,14 @@
   "homepage": "https://github.com/jwow777/earth-and-moon#readme",
   "devDependencies": {
     "@types/three": "^0.184.0",
+    "@vitejs/plugin-legacy": "^6.1.1",
     "autoprefixer": "^10.5.0",
-    "clean-webpack-plugin": "^4.0.0",
-    "css-loader": "^7.1.4",
     "cssnano": "^7.1.5",
     "gh-pages": "^6.3.0",
-    "html-webpack-plugin": "^5.6.7",
-    "mini-css-extract-plugin": "^2.10.2",
     "npm-check-updates": "^21.0.2",
-    "postcss-loader": "^8.2.1",
-    "ts-loader": "^9.5.7",
+    "postcss": "^8.5.3",
     "typescript": "^6.0.3",
-    "webpack": "^5.106.2",
-    "webpack-cli": "^7.0.2",
-    "webpack-dev-server": "^5.2.3"
+    "vite": "^6.4.2"
   },
   "dependencies": {
     "core-js": "^3.49.0",
