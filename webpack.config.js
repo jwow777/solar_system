@@ -6,7 +6,7 @@ require("regenerator-runtime/runtime");
 
 module.exports = {
   entry: {
-    main: './src/index.js'
+    main: './src/index.ts'
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -14,16 +14,29 @@ module.exports = {
     publicPath: '',
   },
   mode: 'development',
+  resolve: {
+    extensions: ['.ts', '.js']
+  },
   devServer: {
     static: {
       directory: path.resolve(__dirname, './dist')
     },
     open: true,
     compress: true,
-    port: 8080
+    port: 8082
   },
   module: {
     rules: [{
+        test: /\.ts$/,
+        use: {
+          loader: 'ts-loader',
+          options: {
+            transpileOnly: true
+          }
+        },
+        exclude: /node_modules/
+      },
+      {
         test: /\.js$/,
         use: 'babel-loader',
         exclude: '/node_modules/'
