@@ -1,8 +1,8 @@
 import "core-js/stable";
 import "regenerator-runtime/runtime";
 import './index.css';
-import * as THREE from "./js/three.module.js";
-import { OrbitControls } from "./js/OrbitControls.js";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import ProtoPlanet from "./js/ProtoPlanet.ts";
 import galaxyMap from './img/maps/8k_stars_milky_way.jpg';
 import earthMap from './img/maps/2_no_clouds_8k.jpg';
