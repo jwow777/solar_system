@@ -44,33 +44,33 @@ const texture = new THREE.TextureLoader();
 
 // Фон
 const galaxy = new THREE.Mesh(new THREE.SphereGeometry(400, 64, 64), new THREE.MeshBasicMaterial({
-  map: texture.load(galaxyMap), 
+  map: texture.load(galaxyMap, () => console.log('Galaxy texture loaded')), 
   side: THREE.DoubleSide
 }));
 
 // Земля
 const earth = new ProtoPlanet(6.371, { 
   bumpScale: 0.01,
-  bumpMap: texture.load(earthBumpMap),
-  map: texture.load(earthMap),
+  bumpMap: texture.load(earthBumpMap, () => console.log('Earth bump loaded')),
+  map: texture.load(earthMap, () => console.log('Earth map loaded')),
   shininess: 10,
   specular: new THREE.Color('grey'),
-  specularMap: texture.load(earthSpecularMap),
+  specularMap: texture.load(earthSpecularMap, () => console.log('Earth specular loaded')),
 }).generate();
 earth.castShadow = true;
 earth.receiveShadow = true;
 
 // Атмосфера Земли
 const atmosphere = new ProtoPlanet(6.44, { 
-  alphaMap: texture.load(earthAtmosphereMap),
+  alphaMap: texture.load(earthAtmosphereMap, () => console.log('Atmosphere loaded')),
   transparent: true
 }).generate();
 
 // Луна
 const moon = new ProtoPlanet(1.7371, { 
   bumpScale: 0.03,
-  bumpMap: texture.load(moonBumpMap),
-  map: texture.load(moonMap),
+  bumpMap: texture.load(moonBumpMap, () => console.log('Moon bump loaded')),
+  map: texture.load(moonMap, () => console.log('Moon map loaded')),
 }).generate();
 moon.position.set(100, 0, 0);
 moon.castShadow = true;
