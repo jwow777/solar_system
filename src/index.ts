@@ -84,7 +84,7 @@ moon.receiveShadow = true;
 let theta = 90 * degree; // начальный угол
 const radius = moon.position.x;
 
-scene.add(spotLight, galaxy, earth, atmosphere, moon);
+scene.add(directionalLight, galaxy, earth, atmosphere, moon);
 
 const animate = () => {
   requestAnimationFrame(animate);
