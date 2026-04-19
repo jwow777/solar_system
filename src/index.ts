@@ -31,9 +31,12 @@ spotLight.castShadow = true;
 spotLight.shadow.focus = 0.15;
 spotLight.shadowMapVisible = true;
 
-const light = new THREE.Light( 0xffffbb,  1 );
-light.position.set(0, 0, 400);
-scene.add( light );
+const ambientLight = new THREE.AmbientLight(0x404040, 0.5); // мягкий ambient свет
+scene.add(ambientLight);
+
+// const light = new THREE.Light( 0xffffbb,  1 );
+// light.position.set(0, 0, 400);
+// scene.add( light );
 
 // Камера
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -53,8 +56,8 @@ const earth = new ProtoPlanet(6.371, {
   bumpScale: 0.01,
   bumpMap: texture.load(earthBumpMap, () => console.log('Earth bump loaded')),
   map: texture.load(earthMap, () => console.log('Earth map loaded')),
-  shininess: 10,
-  specular: new THREE.Color('grey'),
+  shininess: 100,  // увеличено
+  specular: 0x111111,  // число вместо Color
   specularMap: texture.load(earthSpecularMap, () => console.log('Earth specular loaded')),
 }).generate();
 earth.castShadow = true;
