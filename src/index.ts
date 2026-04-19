@@ -22,7 +22,7 @@ const degree = Math.PI / 180;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000);
-camera.position.set(0, 0, 30);
+camera.position.set(0, 50, 100); // поднята для лучшего вида
 
 // Свет
 const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // солнце
@@ -53,7 +53,7 @@ const galaxy = new THREE.Mesh(new THREE.SphereGeometry(400, 64, 64), new THREE.M
 }));
 
 // Земля
-const earth = new ProtoPlanet(6.371, { 
+const earth = new ProtoPlanet(1, { 
   bumpScale: 0.01,
   bumpMap: texture.load(earthBumpMap, () => console.log('Earth bump loaded')),
   map: texture.load(earthMap, () => console.log('Earth map loaded')),
@@ -61,50 +61,61 @@ const earth = new ProtoPlanet(6.371, {
   specular: 0x111111,  // число вместо Color
   specularMap: texture.load(earthSpecularMap, () => console.log('Earth specular loaded')),
 }).generate();
+earth.position.set(20, 0, 0); // орбита вокруг солнца
 earth.castShadow = true;
 earth.receiveShadow = true;
 
 // Атмосфера Земли
-const atmosphere = new ProtoPlanet(6.44, { 
+const atmosphere = new ProtoPlanet(1.05, { 
   alphaMap: texture.load(earthAtmosphereMap, () => console.log('Atmosphere loaded')),
   transparent: true
 }).generate();
+atmosphere.position.copy(earth.position); // следует за Землей
 
 // Луна
-const moon = new ProtoPlanet(1.7371, { 
+const moon = new ProtoPlanet(0.27, { 
   bumpScale: 0.03,
   bumpMap: texture.load(moonBumpMap, () => console.log('Moon bump loaded')),
   map: texture.load(moonMap, () => console.log('Moon map loaded')),
 }).generate();
-moon.position.set(100, 0, 0);
+moon.position.set(earth.position.x + 3, 0, earth.position.z); // вокруг Земли
 moon.castShadow = true;
 moon.receiveShadow = true;
 
 // Солнце (визуальная сфера)
-const sunGeometry = new THREE.SphereGeometry(5, 32, 32);
+const sunGeometry = new THREE.SphereGeometry(10, 32, 32);
 const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // желтый
 const sun = new THREE.Mesh(sunGeometry, sunMaterial);
-sun.position.copy(directionalLight.position);
+sun.position.set(0, 0, 0); // в центре
 
 // Физика движения по орбите 
-let theta = 90 * degree; // начальный угол
-const radius = moon.position.x;
+let thetaEarth = 0; // угол для Земли
+let thetaMoon = 0; // угол для Луны
+const earthRadius = 20; // радиус орбиты Земли
+const moonRadius = 3; // радиус орбиты Луны вокруг Земли
 
 scene.add(directionalLight, galaxy, earth, atmosphere, moon, sun);
 
 const animate = () => {
   requestAnimationFrame(animate);
 
-  // Движение по окружности 
-  // x=r*cos(theta), y=r*sin(theta)
-  // Движение по эллипсу 
-  // x=r*cos(theta), y=1,5*r*sin(theta)+10
+  // Движение Земли вокруг Солнца
+  thetaEarth += 0.005;
+  earth.position.set(earthRadius * Math.cos(thetaEarth), 0, earthRadius * Math.sin(thetaEarth));
+  atmosphere.position.copy(earth.position); // атмосфера следует
 
-  earth.rotation.y += 0.01 * degree;
-  atmosphere.rotation.y += 0.015 * degree;
-  theta += 0.01 * degree;
-  moon.position.set(radius * Math.cos(theta), 0, radius * Math.sin(theta));
-  moon.rotation.y -= 0.01 * degree;
+  // Движение Луны вокруг Земли
+  thetaMoon += 0.02;
+  moon.position.set(
+    earth.position.x + moonRadius * Math.cos(thetaMoon),
+    0,
+    earth.position.z + moonRadius * Math.sin(thetaMoon)
+  );
+
+  // Вращение объектов
+  earth.rotation.y += 0.01;
+  atmosphere.rotation.y += 0.015;
+  moon.rotation.y += 0.005;
 
   controls.update();
   renderer.render(scene, camera);
