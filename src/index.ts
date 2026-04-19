@@ -80,11 +80,17 @@ moon.position.set(100, 0, 0);
 moon.castShadow = true;
 moon.receiveShadow = true;
 
+// Солнце (визуальная сфера)
+const sunGeometry = new THREE.SphereGeometry(5, 32, 32);
+const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // желтый
+const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+sun.position.copy(directionalLight.position);
+
 // Физика движения по орбите 
 let theta = 90 * degree; // начальный угол
 const radius = moon.position.x;
 
-scene.add(directionalLight, galaxy, earth, atmosphere, moon);
+scene.add(directionalLight, galaxy, earth, atmosphere, moon, sun);
 
 const animate = () => {
   requestAnimationFrame(animate);
