@@ -25,13 +25,13 @@ const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerH
 camera.position.set(0, 0, 30);
 
 // Свет
-const spotLight = new THREE.SpotLight(0xffffff);
+const spotLight = new THREE.SpotLight(0xffffff, 2); // увеличена интенсивность
 spotLight.position.set(0, 0, 400);
 spotLight.castShadow = true;
 spotLight.shadow.focus = 0.15;
 spotLight.shadowMapVisible = true;
 
-const ambientLight = new THREE.AmbientLight(0x404040, 0.5); // мягкий ambient свет
+const ambientLight = new THREE.AmbientLight(0x808080, 1); // brighter ambient, полная интенсивность
 scene.add(ambientLight);
 
 // const light = new THREE.Light( 0xffffbb,  1 );
