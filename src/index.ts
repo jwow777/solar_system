@@ -82,6 +82,18 @@ moon.position.set(earth.position.x + 3, 0, earth.position.z); // вокруг З
 moon.castShadow = true;
 moon.receiveShadow = true;
 
+// Венера
+const venus = new THREE.Mesh(new THREE.SphereGeometry(0.9, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffddaa })); // светло-желтый
+venus.position.set(15, 0, 0); // ближе к Солнцу
+venus.castShadow = true;
+venus.receiveShadow = true;
+
+// Марс
+const mars = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), new THREE.MeshBasicMaterial({ color: 0xcd5c5c })); // красный
+mars.position.set(30, 0, 0); // дальше от Солнца
+mars.castShadow = true;
+mars.receiveShadow = true;
+
 // Солнце (визуальная сфера)
 const sunGeometry = new THREE.SphereGeometry(10, 32, 32);
 const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // желтый
@@ -91,17 +103,42 @@ sun.position.set(0, 0, 0); // в центре
 // Физика движения по орбите 
 let thetaEarth = 0; // угол для Земли
 let thetaMoon = 0; // угол для Луны
+let thetaVenus = 0; // угол для Венеры
+let thetaMars = 0; // угол для Марса
 const earthRadius = 20; // радиус орбиты Земли
 const moonRadius = 3; // радиус орбиты Луны вокруг Земли
+const venusRadius = 15; // радиус орбиты Венеры
+const marsRadius = 30; // радиус орбиты Марса
 
-scene.add(directionalLight, galaxy, earth, atmosphere, moon, sun);
+scene.add(directionalLight, galaxy, sun, earth, atmosphere, moon, venus, mars);
 
 const animate = () => {
   requestAnimationFrame(animate);
 
   // Движение Земли вокруг Солнца
   thetaEarth += 0.005;
-  earth.position.set(earthRadius * Math.cos(thetaEarth), 0, earthRadius * Math.sin(thetaEarth));
+  earth.position.set(
+    earthRadius * Math.cos(thetaEarth),
+    0,
+    earthRadius * Math.sin(thetaEarth)
+  );
+
+  // Движение Венеры
+  thetaVenus += 0.007; // быстрее
+  venus.position.set(
+    venusRadius * Math.cos(thetaVenus),
+    0,
+    venusRadius * Math.sin(thetaVenus)
+  );
+
+  // Движение Марса
+  thetaMars += 0.003; // медленнее
+  mars.position.set(
+    marsRadius * Math.cos(thetaMars),
+    0,
+    marsRadius * Math.sin(thetaMars)
+  );
+
   atmosphere.position.copy(earth.position); // атмосфера следует
 
   // Движение Луны вокруг Земли
@@ -116,6 +153,8 @@ const animate = () => {
   earth.rotation.y += 0.01;
   atmosphere.rotation.y += 0.015;
   moon.rotation.y += 0.005;
+  venus.rotation.y += 0.008;
+  mars.rotation.y += 0.006;
 
   controls.update();
   renderer.render(scene, camera);
