@@ -9,7 +9,7 @@ export function setupScene() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.6;
+  renderer.toneMappingExposure = 0.5;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   document.body.appendChild(renderer.domElement);
 

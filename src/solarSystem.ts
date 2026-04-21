@@ -235,10 +235,9 @@ export function createSolarSystem(scene: THREE.Scene) {
   );
   scene.add(sunMesh);
 
-  // decay=0: без затухания — все планеты получают одинаковый свет от Солнца.
-  // Это не физично, но даёт хорошую видимость всех объектов.
-  // Пересвет ближних планет контролируется через toneMappingExposure.
-  const sunLight = new THREE.PointLight(0xfff5e0, 2.5, 0, 0);
+  // decay=0: без затухания — все планеты получают одинаковый свет.
+  // intensity=1.2 + exposure=0.5 даёт мягкое освещение без пересвета.
+  const sunLight = new THREE.PointLight(0xfff5e0, 1.2, 0, 0);
   sunLight.position.set(0, 0, 0);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(2048, 2048);
@@ -249,11 +248,11 @@ export function createSolarSystem(scene: THREE.Scene) {
   scene.add(sunLight);
 
   // Фоновый свет — тёмная сторона планет не полностью чёрная
-  const ambientLight = new THREE.AmbientLight(0x202030, 0.15);
+  const ambientLight = new THREE.AmbientLight(0x202030, 0.2);
   scene.add(ambientLight);
 
   // Fill light — имитация рассеяния для дальних планет
-  const fillLight = new THREE.DirectionalLight(0x334455, 0.2);
+  const fillLight = new THREE.DirectionalLight(0x334455, 0.15);
   fillLight.position.set(1, 0.5, 1).normalize();
   scene.add(fillLight);
 

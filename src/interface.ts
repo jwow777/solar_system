@@ -2,11 +2,11 @@ import { GUI } from "lil-gui";
 import * as THREE from "three";
 
 export const params = {
-  sunIntensity: 2.5,
+  sunIntensity: 1.2,
   sunDistance: 0,
   sunDecay: 0,
   sunColor: '#fff5e0',
-  ambientIntensity: 0.15,
+  ambientIntensity: 0.2,
   bloomStrength: 0.3,
   bloomRadius: 0.3,
   bloomThreshold: 0.45,
@@ -16,7 +16,7 @@ export const params = {
   starOpacity: 0.8,
   planetScale: 1.0,
   showOrbits: true,
-  exposure: 0.6
+  exposure: 0.5
 };
 
 export interface TimeControl {
@@ -35,10 +35,8 @@ export function setupInterface(system: any, camera: THREE.PerspectiveCamera, con
   // оставляем добавление папок: Источник света, Экран, Время) ...
   
   const lightFolder = gui.addFolder('💡 Источник света');
-  lightFolder.add(params, 'sunIntensity', 0, 500).name('Мощность Солнца').onChange((v: number) => system.sun.light.intensity = v);
-  lightFolder.add(params, 'sunDistance', 200, 3000).name('Дальность света').onChange((v: number) => system.sun.light.distance = v);
-  lightFolder.add(params, 'sunDecay', 0.5, 2.0).name('Затухание').onChange((v: number) => system.sun.light.decay = v);
-  lightFolder.add(params, 'ambientIntensity', 0, 0.5).name('Фоновый свет').onChange((v: number) => system.ambientLight.intensity = v);
+  lightFolder.add(params, 'sunIntensity', 0, 5, 0.05).name('Мощность Солнца').onChange((v: number) => system.sun.light.intensity = v);
+  lightFolder.add(params, 'ambientIntensity', 0, 1, 0.01).name('Фоновый свет').onChange((v: number) => system.ambientLight.intensity = v);
   lightFolder.addColor(params, 'sunColor').name('Цвет Солнца').onChange((v: string) => {
     system.sun.light.color.set(v);
     sunSprite.material.color.set(v);
