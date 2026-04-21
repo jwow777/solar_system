@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "vite build",
-    "dev": "vite",
+    "start": "vite",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "core-js": "^3.49.0",
+    "lil-gui": "^0.21.0",
     "regenerator-runtime": "^0.14.1",
     "rimraf": "^6.1.3",
     "three": "^0.184.0"
