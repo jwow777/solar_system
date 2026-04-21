@@ -2,11 +2,11 @@ import { GUI } from "lil-gui";
 import * as THREE from "three";
 
 export const params = {
-  sunIntensity: 80,
-  sunDistance: 1500,
-  sunDecay: 1.0,
-  sunColor: '#ffffff',
-  ambientIntensity: 0.05,
+  sunIntensity: 2.5,
+  sunDistance: 0,
+  sunDecay: 0,
+  sunColor: '#fff5e0',
+  ambientIntensity: 0.15,
   bloomStrength: 0.3,
   bloomRadius: 0.3,
   bloomThreshold: 0.45,
@@ -16,7 +16,7 @@ export const params = {
   starOpacity: 0.8,
   planetScale: 1.0,
   showOrbits: true,
-  exposure: 0.65
+  exposure: 0.6
 };
 
 export interface TimeControl {

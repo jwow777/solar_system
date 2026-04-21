@@ -235,8 +235,10 @@ export function createSolarSystem(scene: THREE.Scene) {
   );
   scene.add(sunMesh);
 
-  // Физически корректный свет: decay=2 (квадратичное затухание), большая дальность
-  const sunLight = new THREE.PointLight(0xfff5e0, 3.5, 0, 2);
+  // decay=0: без затухания — все планеты получают одинаковый свет от Солнца.
+  // Это не физично, но даёт хорошую видимость всех объектов.
+  // Пересвет ближних планет контролируется через toneMappingExposure.
+  const sunLight = new THREE.PointLight(0xfff5e0, 2.5, 0, 0);
   sunLight.position.set(0, 0, 0);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(2048, 2048);
@@ -246,13 +248,13 @@ export function createSolarSystem(scene: THREE.Scene) {
   sunLight.shadow.camera.far  = 2000;
   scene.add(sunLight);
 
-  // Слабый фоновый свет — чтобы дальние планеты не были полностью чёрными
-  const ambientLight = new THREE.AmbientLight(0x111122, 0.08);
+  // Фоновый свет — тёмная сторона планет не полностью чёрная
+  const ambientLight = new THREE.AmbientLight(0x202030, 0.15);
   scene.add(ambientLight);
 
-  // Дополнительный направленный свет для дальних планет (имитация рассеяния)
-  const fillLight = new THREE.DirectionalLight(0x223344, 0.15);
-  fillLight.position.set(0, 1, 0);
+  // Fill light — имитация рассеяния для дальних планет
+  const fillLight = new THREE.DirectionalLight(0x334455, 0.2);
+  fillLight.position.set(1, 0.5, 1).normalize();
   scene.add(fillLight);
 
   // Спрайт-ореол Солнца
