@@ -60,6 +60,17 @@ function updatePhysics(deltaDays: number) {
 
       // Синхронное вращение (приливная блокировка) — луна всегда смотрит на планету
       mesh.rotation.y = -angle;
+
+      // Обновляем uniforms шейдера тени
+      if (mesh.material?.uniforms) {
+        // Мировая позиция родительской планеты
+        const parentPlanet = system[moonData.parent];
+        if (parentPlanet?.group) {
+          mesh.material.uniforms.planetPos.value.copy(parentPlanet.group.position);
+        }
+        // Солнце всегда в (0,0,0)
+        mesh.material.uniforms.sunPos.value.set(0, 0, 0);
+      }
     });
   }
 }

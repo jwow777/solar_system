@@ -239,24 +239,23 @@ export function createSolarSystem(scene: THREE.Scene) {
   scene.add(sunMesh);
 
   // decay=0: без затухания — все планеты получают одинаковый свет.
-  // intensity=1.2 + exposure=0.5 даёт мягкое освещение без пересвета.
+  // Тени от PointLight работают через cubemap — дорого, но корректно.
   const sunLight = new THREE.PointLight(0xfff5e0, 1.2, 0, 0);
   sunLight.position.set(0, 0, 0);
   sunLight.castShadow = true;
-  sunLight.shadow.mapSize.set(2048, 2048);
-  sunLight.shadow.bias       = -0.0005;
-  sunLight.shadow.normalBias = -0.002;
-  sunLight.shadow.camera.near = 0.5;
+  sunLight.shadow.mapSize.set(1024, 1024); // cubemap 6×1024 — баланс качество/производительность
+  sunLight.shadow.bias        = -0.001;
+  sunLight.shadow.normalBias  =  0.02;
+  sunLight.shadow.camera.near = 0.1;
   sunLight.shadow.camera.far  = 2000;
   scene.add(sunLight);
 
-  // Фоновый свет — тёмная сторона планет не полностью чёрная
-  const ambientLight = new THREE.AmbientLight(0x202030, 0.2);
+  // Только ambient — никакого fill light, чтобы не нарушать тени
+  const ambientLight = new THREE.AmbientLight(0x202030, 0.12);
   scene.add(ambientLight);
 
-  // Fill light — имитация рассеяния для дальних планет
-  const fillLight = new THREE.DirectionalLight(0x334455, 0.15);
-  fillLight.position.set(1, 0.5, 1).normalize();
+  // fillLight убран — он давал неправильное освещение с фиксированного направления
+  const fillLight = new THREE.DirectionalLight(0x000000, 0); // заглушка для совместимости
   scene.add(fillLight);
 
   // Спрайт-ореол Солнца
@@ -385,29 +384,92 @@ export function createSolarSystem(scene: THREE.Scene) {
 
   // ── Создание спутников ──────────────────────────────────────────────────────
   MOONS_DATA.forEach((moonData: any) => {
-    const parentGroup = planets[moonData.parent]?.group;
+    const parentPlanet = planets[moonData.parent];
+    const parentGroup  = parentPlanet?.group;
     if (!parentGroup) return;
 
-    const texKey  = moonData.texture ? TEXTURE_MAP[moonData.texture] : null;
-    const moonMat = new THREE.MeshStandardMaterial({
-      map:       texKey ? loadTex(texKey) : undefined,
-      color:     texKey ? 0xffffff : new THREE.Color(moonData.color),
-      roughness: 0.9,
-      metalness: 0.0,
-    });
+    const texKey = moonData.texture ? TEXTURE_MAP[moonData.texture] : null;
 
-    // Луна — bump
-    if (moonData.name === 'moon') {
-      moonMat.bumpMap   = loadTex(moonBumpMap);
-      moonMat.bumpScale = 0.04;
-    }
+    // Размер планеты-родителя для расчёта тени
+    const PLANET_SIZES: Record<string, number> = {
+      earth: 1.0, jupiter: 3.8, saturn: 3.2, uranus: 2.2, neptune: 2.1
+    };
+    const parentRadius = PLANET_SIZES[moonData.parent] ?? 1.0;
+
+    // Шейдерный материал с геометрической проверкой тени от планеты
+    const moonMat = new THREE.ShaderMaterial({
+      uniforms: {
+        moonMap:      { value: texKey ? loadTex(texKey) : null },
+        hasTex:       { value: texKey ? 1.0 : 0.0 },
+        baseColor:    { value: new THREE.Color(moonData.color) },
+        sunPos:       { value: new THREE.Vector3(0, 0, 0) },
+        planetPos:    { value: new THREE.Vector3(0, 0, 0) },
+        planetRadius: { value: parentRadius },
+        ambientStr:   { value: 0.12 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        void main() {
+          vUv      = uv;
+          vNormal  = normalize(mat3(modelMatrix) * normal);
+          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D moonMap;
+        uniform float     hasTex;
+        uniform vec3      baseColor;
+        uniform vec3      sunPos;
+        uniform vec3      planetPos;
+        uniform float     planetRadius;
+        uniform float     ambientStr;
+        varying vec2 vUv;
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+
+        // Проверяет, находится ли точка moonPos в тени сферы (planetPos, planetRadius)
+        // относительно источника света sunPos
+        float planetShadow(vec3 moonPos, vec3 pPos, float pRadius, vec3 sPos) {
+          vec3 toSun  = normalize(sPos - moonPos);
+          vec3 toPlnt = pPos - moonPos;
+          // Проекция вектора планета→луна на направление к Солнцу
+          float proj  = dot(toPlnt, toSun);
+          // Если планета позади луны (proj < 0) — тени нет
+          if (proj < 0.0) return 1.0;
+          // Ближайшая точка луча к центру планеты
+          vec3 closest = moonPos + toSun * proj;
+          float dist   = length(closest - pPos);
+          // Мягкая граница тени
+          return smoothstep(pRadius * 0.9, pRadius * 1.1, dist);
+        }
+
+        void main() {
+          vec3 toSun  = normalize(sunPos - vWorldPos);
+          float NdotL = max(0.0, dot(vNormal, toSun));
+
+          // Диффузное освещение
+          float diffuse = NdotL;
+
+          // Геометрическая тень от планеты
+          float shadow = planetShadow(vWorldPos, planetPos, planetRadius, sunPos);
+
+          // Итоговая яркость
+          float light = ambientStr + diffuse * shadow;
+
+          // Цвет поверхности
+          vec4 texColor = hasTex > 0.5 ? texture2D(moonMap, vUv) : vec4(baseColor, 1.0);
+          gl_FragColor  = vec4(texColor.rgb * light, 1.0);
+        }
+      `,
+    });
 
     const moonMesh = new THREE.Mesh(
       new THREE.SphereGeometry(moonData.size, 32, 32),
       moonMat
     );
-    moonMesh.castShadow    = true;
-    moonMesh.receiveShadow = true;
 
     // Группа с наклоном орбиты
     const orbitGroup = new THREE.Group();
