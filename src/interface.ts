@@ -35,28 +35,28 @@ export function setupInterface(system: any, camera: THREE.PerspectiveCamera, con
   // оставляем добавление папок: Источник света, Экран, Время) ...
   
   const lightFolder = gui.addFolder('💡 Источник света');
-  lightFolder.add(params, 'sunIntensity', 0, 500).name('Мощность Солнца').onChange(v => system.sun.light.intensity = v);
-  lightFolder.add(params, 'sunDistance', 200, 3000).name('Дальность света').onChange(v => system.sun.light.distance = v);
-  lightFolder.add(params, 'sunDecay', 0.5, 2.0).name('Затухание').onChange(v => system.sun.light.decay = v);
-  lightFolder.add(params, 'ambientIntensity', 0, 0.5).name('Фоновый свет').onChange(v => system.ambientLight.intensity = v);
-  lightFolder.addColor(params, 'sunColor').name('Цвет Солнца').onChange(v => {
+  lightFolder.add(params, 'sunIntensity', 0, 500).name('Мощность Солнца').onChange((v: number) => system.sun.light.intensity = v);
+  lightFolder.add(params, 'sunDistance', 200, 3000).name('Дальность света').onChange((v: number) => system.sun.light.distance = v);
+  lightFolder.add(params, 'sunDecay', 0.5, 2.0).name('Затухание').onChange((v: number) => system.sun.light.decay = v);
+  lightFolder.add(params, 'ambientIntensity', 0, 0.5).name('Фоновый свет').onChange((v: number) => system.ambientLight.intensity = v);
+  lightFolder.addColor(params, 'sunColor').name('Цвет Солнца').onChange((v: string) => {
     system.sun.light.color.set(v);
     sunSprite.material.color.set(v);
   });
 
   const renderFolder = gui.addFolder('🎨 Экран и эффекты');
-  renderFolder.add(params, 'exposure', 0.2, 2.0).name('Экспозиция').onChange(v => renderer.toneMappingExposure = v);
-  renderFolder.add(params, 'bloomStrength', 0, 2).name('Bloom Сила').onChange(v => bloomPass.strength = v);
-  renderFolder.add(params, 'bloomRadius', 0, 1).name('Bloom Радиус').onChange(v => bloomPass.radius = v);
-  renderFolder.add(params, 'bloomThreshold', 0, 1).name('Bloom Порог').onChange(v => bloomPass.threshold = v);
-  renderFolder.addColor(params, 'bloomTint').name('Bloom Цвет').onChange(v => sunSprite.material.color.set(v));
+  renderFolder.add(params, 'exposure', 0.2, 2.0).name('Экспозиция').onChange((v: number) => renderer.toneMappingExposure = v);
+  renderFolder.add(params, 'bloomStrength', 0, 2).name('Bloom Сила').onChange((v: number) => bloomPass.strength = v);
+  renderFolder.add(params, 'bloomRadius', 0, 1).name('Bloom Радиус').onChange((v: number) => bloomPass.radius = v);
+  renderFolder.add(params, 'bloomThreshold', 0, 1).name('Bloom Порог').onChange((v: number) => bloomPass.threshold = v);
+  renderFolder.addColor(params, 'bloomTint').name('Bloom Цвет').onChange((v: string) => sunSprite.material.color.set(v));
 
   gui.add(params, 'showOrbits').name('Показать орбиты').onChange((v: boolean) => {
-    Object.values(system.orbits).forEach((line: THREE.Line) => line.visible = v);
+    Object.values(system.orbits).forEach((line: any) => { line.visible = v; });
     if (system.moons) Object.values(system.moons).forEach((m: any) => m.orbitLine.visible = v);
   });
 
-  gui.add(params, 'planetScale', 0.5, 2).name('Масштаб планет').onChange(v => {
+  gui.add(params, 'planetScale', 0.5, 2).name('Масштаб планет').onChange((v: number) => {
     Object.values(system).forEach((obj: any) => { if (obj.group) obj.group.scale.setScalar(v); });
   });
 
@@ -130,9 +130,11 @@ export function setupInterface(system: any, camera: THREE.PerspectiveCamera, con
   const btnPlay = document.createElement('button'); btnPlay.className = 'time-btn active'; btnPlay.innerHTML = pauseIcon;
   const btnFwd = document.createElement('button'); btnFwd.className = 'time-btn'; btnFwd.innerHTML = skipFwdIcon;
 
+  let isPlaying = true;
   btnPlay.onclick = () => {
     timeControl.togglePlay();
-    if (params.isPaused) { btnPlay.innerHTML = playIcon; btnPlay.classList.remove('active'); }
+    isPlaying = !isPlaying;
+    if (!isPlaying) { btnPlay.innerHTML = playIcon; btnPlay.classList.remove('active'); }
     else { btnPlay.innerHTML = pauseIcon; btnPlay.classList.add('active'); }
   };
   btnBack.onclick = () => timeControl.step(-10);
