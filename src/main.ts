@@ -34,11 +34,11 @@ function updatePhysics(deltaDays: number) {
     // Позиция группы по орбите
     p.group.position.copy(getPlanetPosition(data, simDays));
 
-    // Осевое вращение (с визуальным замедлением для наглядности)
+    // Осевое вращение вокруг наклонённой оси (mesh крутится, pivot наклонён)
     const period = ROTATION_PERIODS[data.name] || 1;
     const visualSlowdown = 0.05;
     const angleStep = (2 * Math.PI / Math.abs(period)) * deltaDays * visualSlowdown;
-    p.pivot.rotation.y += Math.sign(period) * angleStep;
+    p.mesh.rotation.y += Math.sign(period) * angleStep;
   });
 
   // Обновляем uniform sunPos для шейдера день/ночь Земли

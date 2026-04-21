@@ -14,9 +14,9 @@ export function setupPostProcessing(
 
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    0.4,  // strength
-    0.3,  // radius
-    0.15  // threshold
+    0.3,   // strength
+    1.0,   // radius
+    0.335  // threshold
   );
   composer.addPass(bloomPass);
 

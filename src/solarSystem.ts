@@ -158,22 +158,25 @@ function createEarthMaterial(loader: THREE.TextureLoader, sunLight: THREE.PointL
       void main() {
         vec3  toSun   = normalize(sunPos - vWorldPos);
         float NdotL   = dot(vNormal, toSun);
-        float blend   = smoothstep(-0.15, 0.25, NdotL);
+        // Более мягкий переход день/ночь
+        float blend   = smoothstep(-0.2, 0.3, NdotL);
 
         vec4  dayCol   = texture2D(dayMap,   vUv);
         vec4  nightCol = texture2D(nightMap, vUv);
         vec4  clouds   = texture2D(cloudsMap, vUv);
         float water    = texture2D(waterMap,  vUv).r;
 
-        // Смешиваем день/ночь
-        vec3 surface = mix(nightCol.rgb * 1.2, dayCol.rgb, blend);
+        // Смешиваем день/ночь (ночная сторона чуть темнее)
+        vec3 surface = mix(nightCol.rgb * 0.8, dayCol.rgb, blend);
 
-        // Облака поверх (ярче на дневной стороне)
-        float cloudAlpha = clouds.r * mix(0.0, 0.85, blend);
-        surface = mix(surface, vec3(1.0), cloudAlpha);
+        // Облака: смешиваем с цветом поверхности, не с белым
+        // Используем серо-белый цвет облаков вместо чистого белого
+        vec3 cloudColor = vec3(0.85, 0.88, 0.9);
+        float cloudAlpha = clouds.r * mix(0.0, 0.7, blend);
+        surface = mix(surface, cloudColor * blend, cloudAlpha);
 
-        // Лёгкий блик на воде
-        float specular = water * pow(max(0.0, NdotL), 32.0) * 0.4 * blend;
+        // Очень лёгкий блик на воде
+        float specular = water * pow(max(0.0, NdotL), 48.0) * 0.2 * blend;
         surface += vec3(specular);
 
         gl_FragColor = vec4(surface, 1.0);
@@ -306,8 +309,8 @@ export function createSolarSystem(scene: THREE.Scene) {
       mesh.receiveShadow = true;
       pivot.add(mesh);
 
-      // Атмосфера Земли
-      pivot.add(createAtmosphere(1.06, 0x0066ff, 0.65));
+      // Атмосфера Земли (rim-свечение только по краям, не пересвечивает поверхность)
+      pivot.add(createAtmosphere(1.06, 0x1a66ff, 0.35));
 
     // ── Венера — поверхность + атмосфера ─────────────────────────────────────
     } else if (data.name === 'venus') {
@@ -369,8 +372,9 @@ export function createSolarSystem(scene: THREE.Scene) {
       if (data.name === 'neptune') pivot.add(createAtmosphere(size * 1.03, 0x4466ff, 0.35));
     }
 
-    // Наклон оси
-    mesh.rotation.z = (data.axialTilt * Math.PI) / 180;
+    // Наклон оси вращения планеты (применяем к pivot, не к mesh)
+    // Это корректно: pivot наклонён, mesh вращается вокруг наклонённой оси
+    pivot.rotation.z = (data.axialTilt * Math.PI) / 180;
 
     const orbitLine = createOrbitLine(data);
     scene.add(orbitLine);
@@ -380,7 +384,7 @@ export function createSolarSystem(scene: THREE.Scene) {
   });
 
   // ── Создание спутников ──────────────────────────────────────────────────────
-  MOONS_DATA.forEach(moonData => {
+  MOONS_DATA.forEach((moonData: any) => {
     const parentGroup = planets[moonData.parent]?.group;
     if (!parentGroup) return;
 
@@ -405,12 +409,18 @@ export function createSolarSystem(scene: THREE.Scene) {
     moonMesh.castShadow    = true;
     moonMesh.receiveShadow = true;
 
+    // Группа с наклоном орбиты
+    const orbitGroup = new THREE.Group();
+    const incRad = ((moonData.inclination ?? 0) * Math.PI) / 180;
+    orbitGroup.rotation.x = incRad;
+
     const moonOrbit = createMoonOrbit(moonData.orbitRadius, moonData.color);
 
-    parentGroup.add(moonMesh);
-    parentGroup.add(moonOrbit);
+    orbitGroup.add(moonMesh);
+    orbitGroup.add(moonOrbit);
+    parentGroup.add(orbitGroup);
 
-    allMoons[moonData.name] = { mesh: moonMesh, moonData, orbitLine: moonOrbit };
+    allMoons[moonData.name] = { mesh: moonMesh, moonData, orbitLine: moonOrbit, orbitGroup };
   });
 
   return { ...planets, moons: allMoons, ambientLight, fillLight, orbits, sunLight } as any;
