@@ -152,15 +152,19 @@ export function setupInterface(system: any, camera: THREE.PerspectiveCamera, con
     { name: '♀️ Венера', key: 'venus', isPlanet: true, color: '#e6c280' },
     { name: '🌍 Земля', key: 'earth', isPlanet: true, color: '#4488ff' },
     { name: '♂️ Марс', key: 'mars', isPlanet: true, color: '#cc5533' },
-    { name: '💎 Церера', key: 'ceres', isPlanet: true, color: '#887766' },
     { name: '♃ Юпитер', key: 'jupiter', isPlanet: true, color: '#d4a574' },
     { name: '♄ Сатурн', key: 'saturn', isPlanet: true, color: '#c9b896' },
     { name: '♅ Уран', key: 'uranus', isPlanet: true, color: '#afeeee' },
     { name: '♆ Нептун', key: 'neptune', isPlanet: true, color: '#4169e1' },
+  ];
+
+  // Данные для РЯДА 2: КАРЛИКОВЫЕ ПЛАНЕТЫ
+  const littlePlanetsList = [
+    { name: '💎 Церера', key: 'ceres', isPlanet: true, color: '#887766' },
     { name: '❄️ Плутон', key: 'pluto', isPlanet: true, color: '#aabbcc' },
   ];
 
-  // Данные для РЯДА 2: СПУТНИКИ
+  // Данные для РЯДА 3: СПУТНИКИ
   const moonsList = [
     { name: '🌕 Луна', key: 'moon', parent: 'earth', color: '#aaaaaa' },
     { name: '🟠 Ио', key: 'io', parent: 'jupiter', color: '#cccc44' },
@@ -198,6 +202,11 @@ export function setupInterface(system: any, camera: THREE.PerspectiveCamera, con
   rowPlanets.className = 'nav-row';
   createRow(planetsList, rowPlanets);
 
+  // Создаем ряд карликовых планет
+  const rowLittlePlanets = document.createElement('div');
+  rowLittlePlanets.className = 'nav-row';
+  createRow(littlePlanetsList, rowLittlePlanets);
+
   // Создаем ряд спутников
   const rowMoons = document.createElement('div');
   rowMoons.className = 'nav-row';
@@ -205,6 +214,7 @@ export function setupInterface(system: any, camera: THREE.PerspectiveCamera, con
 
   // Собираем всё вместе
   mainPanel.appendChild(rowPlanets);
+  mainPanel.appendChild(rowLittlePlanets);
   mainPanel.appendChild(rowMoons);
 
   // Добавляем панели в DOM

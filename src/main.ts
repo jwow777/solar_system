@@ -3,12 +3,15 @@ import { setupScene } from "./setup";
 import { setupPostProcessing } from "./postProcessing";
 import { createSolarSystem } from "./solarSystem";
 import { setupInterface, params, TimeControl } from "./interface";
-import { getPlanetPosition, PLANETS_DATA } from "./utils/orbitPhysics";
+import { getPlanetPosition } from "./utils/orbitPhysics";
 import * as THREE from "three";
+import { PLANETS_DATA } from './constants/planetsData';
 
 const { renderer, scene, camera, controls } = setupScene();
 const { composer, bloomPass } = setupPostProcessing(scene, camera, renderer);
 const system = createSolarSystem(scene);
+const axesHelper = new THREE.AxesHelper(50); // длина в юнитах сцены
+scene.add(axesHelper);
 
 let simDays = 0;
 let isPaused = false;

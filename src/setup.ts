@@ -26,8 +26,8 @@ export function setupScene() {
   controls.maxDistance = 400;
 
   const loader = new THREE.TextureLoader();
-  import('./img/maps/8k_stars_milky_way.jpg').then((img) => {
-    const galaxyGeo = new THREE.SphereGeometry(1500, 64, 64);
+  import('./assets/maps/8k_stars_milky_way.jpg').then((img) => {
+    const galaxyGeo = new THREE.SphereGeometry(600, 64, 64);
     const galaxyMat = new THREE.MeshBasicMaterial({
       map: loader.load(img.default, (t) => t.anisotropy = renderer.capabilities.getMaxAnisotropy()),
       side: THREE.BackSide,

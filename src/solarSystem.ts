@@ -1,33 +1,35 @@
 import * as THREE from "three";
-import { PLANETS_DATA, AU_SCALE, PlanetOrbitData, getPlanetPosition } from "./utils/orbitPhysics";
-import { MOONS_DATA } from "./moonsData";
+import { getPlanetPosition } from "./utils/orbitPhysics";
+import { PLANETS_DATA } from "./constants/planetsData";
+import { MOONS_DATA } from "./constants/moonsData";
 
 // ── Текстуры ──────────────────────────────────────────────────────────────────
-import sunMap            from './img/maps/8k_sun.jpg';
-import mercuryMap        from './img/maps/8k_mercury.jpg';
-import venusSurfaceMap   from './img/maps/8k_venus_surface.jpg';
-import venusAtmosMap     from './img/maps/4k_venus_atmosphere.jpg';
-import earthDayMap       from './img/maps/8k_earth_daymap.jpg';
-import earthNightMap     from './img/maps/8k_earth_nightmap.jpg';
-import earthCloudsMap    from './img/maps/8k_earth_clouds.jpg';
-import earthNormalMap    from './img/maps/8k_earth_normal_map.tif';
-import earthSpecMap      from './img/maps/8k_earth_specular_map.tif';
-import earthBumpMap      from './img/maps/elev_bump_8k.jpg';
-import waterMap          from './img/maps/water_8k.png';
-import marsMap           from './img/maps/8k_mars.jpg';
-import jupiterMap        from './img/maps/8k_jupiter.jpg';
-import saturnMap         from './img/maps/8k_saturn.jpg';
-import saturnRingMap     from './img/maps/8k_saturn_ring_alpha.png';
-import uranusMap         from './img/maps/2k_uranus.jpg';
-import neptuneMap        from './img/maps/2k_neptune.jpg';
-import moonMap           from './img/maps/8k_moon.jpg';
-import moonBumpMap       from './img/maps/8k_bump_moon.jpg';
-import ceresMap          from './img/maps/4k_ceres_fictional.jpg';
-import erisMap           from './img/maps/4k_eris_fictional.jpg';
-import haumeaMap         from './img/maps/4k_haumea_fictional.jpg';
-import makemakeMap       from './img/maps/4k_makemake_fictional.jpg';
+import sunMap            from './assets/maps/8k_sun.jpg';
+import mercuryMap        from './assets/maps/8k_mercury.jpg';
+import venusSurfaceMap   from './assets/maps/8k_venus_surface.jpg';
+import venusAtmosMap     from './assets/maps/4k_venus_atmosphere.jpg';
+import earthDayMap       from './assets/maps/8k_earth_daymap.jpg';
+import earthNightMap     from './assets/maps/8k_earth_nightmap.jpg';
+import earthCloudsMap    from './assets/maps/8k_earth_clouds.jpg';
+import earthNormalMap    from './assets/maps/8k_earth_normal_map.tif';
+import earthSpecMap      from './assets/maps/8k_earth_specular_map.tif';
+import earthBumpMap      from './assets/maps/elev_bump_8k.jpg';
+import waterMap          from './assets/maps/water_8k.png';
+import marsMap           from './assets/maps/8k_mars.jpg';
+import jupiterMap        from './assets/maps/8k_jupiter.jpg';
+import saturnMap         from './assets/maps/8k_saturn.jpg';
+import saturnRingMap     from './assets/maps/8k_saturn_ring_alpha.png';
+import uranusMap         from './assets/maps/2k_uranus.jpg';
+import neptuneMap        from './assets/maps/2k_neptune.jpg';
+import moonMap           from './assets/maps/8k_moon.jpg';
+import moonBumpMap       from './assets/maps/8k_bump_moon.jpg';
+import ceresMap          from './assets/maps/4k_ceres_fictional.jpg';
+import erisMap           from './assets/maps/4k_eris_fictional.jpg';
+import haumeaMap         from './assets/maps/4k_haumea_fictional.jpg';
+import makemakeMap       from './assets/maps/4k_makemake_fictional.jpg';
 // Плутон — используем eris как визуально похожую карликовую планету
-import plutoMap          from './img/maps/4k_eris_fictional.jpg';
+import plutoMap          from './assets/maps/4k_eris_fictional.jpg';
+import { PlanetOrbitData } from "./types/types";
 
 // ── Карта текстур по ключу ────────────────────────────────────────────────────
 export const TEXTURE_MAP: Record<string, string> = {
@@ -335,7 +337,6 @@ export function createSolarSystem(scene: THREE.Scene) {
       });
       const atmosMesh = new THREE.Mesh(new THREE.SphereGeometry(size * 1.03, 64, 64), atmosMat);
       pivot.add(atmosMesh);
-
       // Rim-свечение
       pivot.add(createAtmosphere(size * 1.07, 0xffcc44, 0.4));
 
@@ -377,6 +378,8 @@ export function createSolarSystem(scene: THREE.Scene) {
 
     const orbitLine = createOrbitLine(data);
     scene.add(orbitLine);
+    const planetAxes = new THREE.AxesHelper(5);
+    mesh.add(planetAxes); // добавляем как дочерний объект
 
     planets[data.name] = { group, mesh, pivot, data, orbitLine };
     orbits[data.name]  = orbitLine;
@@ -481,6 +484,8 @@ export function createSolarSystem(scene: THREE.Scene) {
     orbitGroup.add(moonMesh);
     orbitGroup.add(moonOrbit);
     parentGroup.add(orbitGroup);
+    const moonAxes = new THREE.AxesHelper(5);
+    moonMesh.add(moonAxes); // добавляем как дочерний объект
 
     allMoons[moonData.name] = { mesh: moonMesh, moonData, orbitLine: moonOrbit, orbitGroup };
   });
