@@ -1,173 +1,254 @@
 import './index.css';
-import { setupScene } from "./setup";
-import { setupPostProcessing } from "./postProcessing";
-import { createSolarSystem } from "./solarSystem";
-import { setupInterface, params, TimeControl } from "./interface";
-import { getPlanetPosition } from "./utils/orbitPhysics";
-import * as THREE from "three";
-import { PLANETS_DATA } from './constants/planetsData';
+import * as THREE from 'three';
+import { setupScene } from './setup';
+import { setupPostProcessing } from './postProcessing';
+import { createSolarSystem } from './solarSystem';
+import { setupInterface } from './interface';
+import { createPlanetPanel } from './planetPanel';
+import { getPlanetPosition } from './utils/orbitPhysics';
+import { getMoonMeanAnomaly, getMoonPosition } from './utils/moonOrbits';
+import { advanceSimulation, daysSinceJ2000, FrameClock } from './simulation';
+import { TextureManager } from './textures';
+import { CameraController } from './camera';
+import { ClickGesture } from './interaction';
+import { loadPreferences } from './settings';
+import { OrbitHover } from './orbits';
+import { RenderOrigin } from './renderOrigin';
+import { getRotationAngle } from './rotation';
+import { updatePhysicalOrbit } from './scale';
+import type { BodyId, SimulationState } from './types/types';
 
-const { renderer, scene, camera, controls } = setupScene();
-const { composer, bloomPass } = setupPostProcessing(scene, camera, renderer);
-const system = createSolarSystem(scene);
-const axesHelper = new THREE.AxesHelper(50); // длина в юнитах сцены
-scene.add(axesHelper);
-
-let simDays = 0;
-let isPaused = false;
-
-// Периоды осевого вращения (дней). Отрицательный = ретроградное.
-const ROTATION_PERIODS: Record<string, number> = {
-  mercury: 58.6, venus: -243, earth: 1, mars: 1.03, ceres: 0.38,
-  jupiter: 0.41, saturn: 0.44, uranus: -0.72, neptune: 0.67,
-  pluto: -6.39, haumea: 0.16, makemake: 0.95, eris: 1.0
-};
-
-// Вектор для обновления uniform шейдера Земли
-const sunWorldPos = new THREE.Vector3(0, 0, 0);
-
-function updatePhysics(deltaDays: number) {
-  if (isPaused) return;
-  simDays += deltaDays;
-
-  PLANETS_DATA.forEach(data => {
-    const p = system[data.name];
-    if (!p) return;
-
-    // Позиция группы по орбите
-    p.group.position.copy(getPlanetPosition(data, simDays));
-
-    // Осевое вращение вокруг наклонённой оси (mesh крутится, pivot наклонён)
-    const period = ROTATION_PERIODS[data.name] || 1;
-    const visualSlowdown = 0.05;
-    const angleStep = (2 * Math.PI / Math.abs(period)) * deltaDays * visualSlowdown;
-    p.mesh.rotation.y += Math.sign(period) * angleStep;
+function startApplication() {
+  const { renderer, scene, camera, controls } = setupScene();
+  const { composer, bloomPass } = setupPostProcessing(scene, camera, renderer);
+  const renderOrigin = new RenderOrigin(scene, camera);
+  const textures = new TextureManager(renderer.capabilities.getMaxAnisotropy(), renderer.capabilities.maxTextureSize);
+  const system = createSolarSystem(scene, textures);
+  const orbitHover = new OrbitHover(system);
+  textures.bind('background', 'galaxyMap', texture => {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    scene.background = texture;
+    scene.backgroundIntensity = 0.45;
   });
+  const preferences = loadPreferences();
+  const state: SimulationState = { simDays: daysSinceJ2000(), isPaused: false, timeScale: preferences.timeScale };
+  const abort = new AbortController();
+  const { signal } = abort;
+  const clock = new FrameClock();
+  const cameraController = new CameraController(camera, controls, busy => {
+    renderer.domElement.setAttribute('aria-busy', String(busy));
+  });
+  const panel = createPlanetPanel(state, signal, open => { ui.setInfoOpen(open); updateViewport(); });
+  const bodies = new Map(system.bodies.map(body => [body.id, body]));
+  const meshBodies = new Map(system.bodies.map(body => [body.mesh as THREE.Object3D, body]));
+  const targets = system.bodies.map(body => body.mesh);
+  let selectedId: BodyId | null = null;
 
-  // Обновляем uniform sunPos для шейдера день/ночь Земли
-  if (system.earth?.mesh?.material?.uniforms?.sunPos) {
-    system.earth.mesh.material.uniforms.sunPos.value.copy(sunWorldPos);
-  }
-
-  // Движение спутников — позиция относительно родительской группы
-  if (system.moons) {
-    Object.values(system.moons).forEach((moonObj: any) => {
-      const { mesh, moonData } = moonObj;
-      const period = moonData.period; // дней
-      // Угол в радианах: полный оборот за period дней
-      const angle = (simDays / Math.abs(period)) * 2 * Math.PI * Math.sign(period);
-
-      mesh.position.x = Math.cos(angle) * moonData.orbitRadius;
-      mesh.position.z = Math.sin(angle) * moonData.orbitRadius;
-      mesh.position.y = 0;
-
-      // Синхронное вращение (приливная блокировка) — луна всегда смотрит на планету
-      mesh.rotation.y = -angle;
-
-      // Обновляем uniforms шейдера тени
-      if (mesh.material?.uniforms) {
-        // Мировая позиция родительской планеты
-        const parentPlanet = system[moonData.parent];
-        if (parentPlanet?.group) {
-          mesh.material.uniforms.planetPos.value.copy(parentPlanet.group.position);
-        }
-        // Солнце всегда в (0,0,0)
-        mesh.material.uniforms.sunPos.value.set(0, 0, 0);
+  function updatePhysics() {
+    for (const planet of Object.values(system.planets)) {
+      getPlanetPosition(planet.data, state.simDays, planet.group.position);
+      planet.mesh.rotation.y = getRotationAngle(planet.data.name, state.simDays, preferences.settings.realTime);
+      if (planet.clouds && planet.mesh.material instanceof THREE.ShaderMaterial) {
+        planet.clouds.rotation.y = planet.mesh.rotation.y * 1.02;
+        planet.mesh.material.uniforms.cloudOffset.value = (planet.mesh.rotation.y - planet.clouds.rotation.y) / (Math.PI * 2);
       }
-    });
-  }
-}
-
-const timeControl: TimeControl = {
-  step: (days: number) => {
-    const wasPaused = isPaused;
-    isPaused = false;
-    updatePhysics(days);
-    isPaused = wasPaused;
-  },
-  togglePlay: () => { isPaused = !isPaused; }
-};
-
-const { setTargetCallback } = setupInterface(
-  system, camera, controls, bloomPass, system.sun.sprite, renderer, timeControl
-);
-
-let focusTarget: THREE.Object3D | null = null;
-let isTransitioning = false;
-let transitionProgress = 0;
-const startCameraPos  = new THREE.Vector3();
-const targetCameraPos = new THREE.Vector3();
-const targetLookAt    = new THREE.Vector3();
-const lastPlanetPos   = new THREE.Vector3();
-const _worldPos       = new THREE.Vector3(); // переиспользуемый вектор
-const _delta          = new THREE.Vector3(); // переиспользуемый вектор
-
-function switchFocus(targetObj: THREE.Object3D) {
-  focusTarget = targetObj;
-  isTransitioning = true;
-  transitionProgress = 0;
-  startCameraPos.copy(camera.position);
-
-  targetObj.getWorldPosition(_worldPos);
-
-  const isSun   = targetObj === system.sun.mesh;
-  const isGiant = [
-    system.jupiter?.group, system.saturn?.group,
-    system.uranus?.group,  system.neptune?.group
-  ].includes(targetObj);
-  const isMoon = targetObj === system.moons?.moon?.mesh;
-
-  const dist = isSun ? 30 : (isGiant ? 25 : (isMoon ? 4 : 12));
-
-  targetCameraPos.set(_worldPos.x + dist, _worldPos.y + dist / 3, _worldPos.z + dist);
-  targetLookAt.copy(_worldPos);
-  lastPlanetPos.copy(_worldPos);
-}
-
-setTargetCallback(switchFocus);
-
-// Начальный расчёт позиций
-updatePhysics(0);
-
-function animate() {
-  requestAnimationFrame(animate);
-
-  if (!isPaused) {
-    const deltaDays = params.timeScale / 60;
-    updatePhysics(deltaDays);
-    system.sun.mesh.rotation.y += 0.0005;
+      if (preferences.settings.realisticSizes && planet.data.name === selectedId) updatePhysicalOrbit(planet, state.simDays);
+    }
+    for (const moon of Object.values(system.moons)) {
+      getMoonPosition(moon.moonData, state.simDays, moon.mesh.position);
+      // Uniform synchronous spin plus variable orbital speed produces optical libration.
+      moon.mesh.quaternion.copy(moon.orbitalFrame);
+      moon.mesh.rotateY(getMoonMeanAnomaly(moon.moonData, state.simDays));
+    }
+    system.sun.mesh.rotation.y = getRotationAngle('sun', state.simDays, preferences.settings.realTime);
   }
 
-  // Обновление камеры
-  if (focusTarget) {
-    focusTarget.getWorldPosition(_worldPos);
+  function select(id: BodyId, keyboard = false) {
+    const body = bodies.get(id);
+    if (!body) return;
+    selectedId = id;
+    updatePhysics();
+    cameraController.focus(body);
+    textures.select(id);
+    ui.setSelected(id);
+    panel.open(id, keyboard);
+  }
 
-    if (isTransitioning) {
-      transitionProgress += 0.03;
-      if (transitionProgress >= 1) {
-        transitionProgress = 1;
-        isTransitioning = false;
-      }
-      camera.position.lerpVectors(startCameraPos, targetCameraPos, transitionProgress);
-      controls.target.lerpVectors(startCameraPos, targetLookAt, transitionProgress);
-      lastPlanetPos.copy(_worldPos);
+  const ui = setupInterface({
+    system, state, settings: preferences.settings, bloomPass, renderer, signal,
+    select,
+    overview() {
+      selectedId = null;
+      cameraController.overview();
+      textures.select(null);
+      ui.setSelected(null);
+      panel.close(false);
+    },
+    timeControl: {
+      step(days) { state.simDays += days; updatePhysics(); panel.update(); ui.update(); },
+      togglePlay() { state.isPaused = !state.isPaused; },
+      setDays(days) { state.simDays = days; updatePhysics(); panel.update(); },
+    },
+    retryTextures: () => textures.retry(),
+    browse: () => panel.close(false),
+    onScaleChanged: () => { updatePhysics(); cameraController.refit(); },
+  });
+  textures.onStatus = ui.setLoading;
+  ui.setLoading(textures.status);
+  updatePhysics();
+
+  function updateViewport() {
+    const width = window.innerWidth, height = window.innerHeight;
+    const bounds = ui.sceneElement.getBoundingClientRect();
+    cameraController.setViewport(bounds.left, bounds.top, Math.max(1, bounds.width), Math.max(1, bounds.height), width, height);
+  }
+  const layoutObserver = new ResizeObserver(updateViewport);
+  layoutObserver.observe(ui.sceneElement);
+  layoutObserver.observe(ui.element);
+  layoutObserver.observe(panel.element);
+  updateViewport();
+
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  const gesture = new ClickGesture();
+  let pointer: { x: number; y: number } | null = null;
+  let hovered: THREE.Object3D | null = null;
+  const originalEmissive = new Map<THREE.MeshStandardMaterial, { color: THREE.Color; intensity: number }>();
+
+  function highlight(mesh: THREE.Object3D | null, on: boolean) {
+    if (!(mesh instanceof THREE.Mesh) || !(mesh.material instanceof THREE.MeshStandardMaterial)) return;
+    const material = mesh.material;
+    if (on) {
+      originalEmissive.set(material, { color: material.emissive.clone(), intensity: material.emissiveIntensity });
+      material.emissive.set(0x334466);
+      material.emissiveIntensity = 0.6;
     } else {
-      _delta.subVectors(_worldPos, lastPlanetPos);
-      camera.position.add(_delta);
-      controls.target.copy(_worldPos);
-      lastPlanetPos.copy(_worldPos);
+      const original = originalEmissive.get(material);
+      if (original) { material.emissive.copy(original.color); material.emissiveIntensity = original.intensity; }
+      originalEmissive.delete(material);
     }
   }
 
-  controls.update();
-  composer.render();
+  function pick(x: number, y: number) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.set((x - rect.left) / rect.width * 2 - 1, -(y - rect.top) / rect.height * 2 + 1);
+    scene.updateMatrixWorld();
+    camera.updateMatrixWorld();
+    raycaster.setFromCamera(mouse, camera);
+    const hit = raycaster.intersectObjects(targets, false)[0];
+    return hit ? meshBodies.get(hit.object) : undefined;
+  }
+
+  renderer.domElement.addEventListener('pointerdown', event => {
+    if (event.button !== 0) { gesture.cancel(); return; }
+    gesture.down(event.pointerId, event.clientX, event.clientY);
+  }, { signal });
+  renderer.domElement.addEventListener('pointermove', event => {
+    gesture.move(event.pointerId, event.clientX, event.clientY);
+    if (event.pointerType !== 'touch') pointer = { x: event.clientX, y: event.clientY };
+  }, { signal });
+  renderer.domElement.addEventListener('pointerup', event => {
+    if (!gesture.up(event.pointerId, event.clientX, event.clientY)) return;
+    const body = pick(event.clientX, event.clientY);
+    if (body) select(body.id);
+    else panel.close(false);
+  }, { signal });
+  renderer.domElement.addEventListener('pointercancel', () => gesture.cancel(), { signal });
+  renderer.domElement.addEventListener('lostpointercapture', () => gesture.cancel(), { signal });
+  renderer.domElement.addEventListener('pointerleave', () => {
+    pointer = null; panel.hideTooltip(); highlight(hovered, false); hovered = null;
+    orbitHover.set(null);
+    renderer.domElement.style.cursor = '';
+  }, { signal });
+  const cancelTransition = () => cameraController.cancelTransition();
+  controls.addEventListener('start', cancelTransition);
+  document.addEventListener('visibilitychange', () => clock.reset(), { signal });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setPixelRatio(renderer.getPixelRatio());
+    composer.setSize(window.innerWidth, window.innerHeight);
+    updateViewport();
+  }, { signal });
+
+  let lastPanelUpdate = 0;
+  let animationId = 0;
+  function animate(timestamp: number) {
+    animationId = requestAnimationFrame(animate);
+    if (document.hidden) { clock.reset(); return; }
+    const seconds = clock.tick(timestamp, preferences.settings.realTime ? Infinity : 0.1);
+    const delta = advanceSimulation(state, seconds, preferences.settings.realTime);
+    if (delta !== 0) updatePhysics();
+    for (const body of system.bodies) {
+      if (body.mesh.material instanceof THREE.ShaderMaterial && body.mesh.material.uniforms.lightColor) {
+        body.mesh.material.uniforms.lightColor.value.copy(system.sun.light.color);
+        body.mesh.material.uniforms.lightIntensity.value = system.sun.light.intensity;
+        body.mesh.material.uniforms.ambientStr.value = system.ambientLight.intensity;
+      }
+    }
+    cameraController.update(seconds);
+    controls.update(seconds);
+    if (pointer) {
+      const body = pick(pointer.x, pointer.y);
+      const rect = renderer.domElement.getBoundingClientRect();
+      const orbitId = body?.id ?? orbitHover.pick(camera, pointer.x - rect.left, pointer.y - rect.top, rect.width, rect.height);
+      orbitHover.set(orbitId);
+      const mesh = body?.mesh ?? null;
+      if (mesh !== hovered) { highlight(hovered, false); highlight(mesh, true); hovered = mesh; }
+      renderer.domElement.style.cursor = body ? 'pointer' : '';
+      if (body) panel.showTooltip(body.id, pointer.x, pointer.y);
+      else if (orbitId) panel.showTooltip(orbitId, pointer.x, pointer.y, true);
+      else panel.hideTooltip();
+    }
+    if (timestamp - lastPanelUpdate >= 200) { panel.update(); ui.update(); lastPanelUpdate = timestamp; }
+    if (preferences.settings.realisticSizes) renderOrigin.render(() => composer.render(seconds));
+    else composer.render(seconds);
+  }
+  animationId = requestAnimationFrame(animate);
+
+  const onContextLost = (event: Event) => {
+    event.preventDefault();
+    clock.reset();
+  };
+  renderer.domElement.addEventListener('webglcontextlost', onContextLost, { signal });
+
+  if (import.meta.hot) import.meta.hot.dispose(() => {
+    abort.abort();
+    layoutObserver.disconnect();
+    cancelAnimationFrame(animationId);
+    controls.removeEventListener('start', cancelTransition);
+    controls.dispose();
+    ui.dispose();
+    panel.dispose();
+    textures.dispose();
+    system.sun.light.shadow.dispose();
+    system.sun.sprite.material.map?.dispose();
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    scene.traverse(object => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite) {
+        if ('geometry' in object) geometries.add(object.geometry);
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
+      }
+    });
+    for (const geometry of geometries) geometry.dispose();
+    for (const material of materials) material.dispose();
+    for (const pass of composer.passes) pass.dispose();
+    composer.dispose();
+    renderer.dispose();
+    renderer.domElement.remove();
+  });
 }
 
-animate();
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
-});
+try { startApplication(); }
+catch (error) {
+  const message = document.createElement('div');
+  message.className = 'startup-error';
+  message.setAttribute('role', 'alert');
+  message.textContent = 'Не удалось запустить 3D-сцену. Проверьте поддержку WebGL2 и аппаратное ускорение браузера.';
+  document.body.appendChild(message);
+  console.error(error);
+}

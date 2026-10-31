@@ -1,51 +1,55 @@
-import * as THREE from "three";
+import { Vector3 } from 'three';
+import type { PlanetOrbitData } from '../types/types';
 
-import { PlanetOrbitData } from "../types/types";
+export const AU_SCALE = 30;
+const TAU = 2 * Math.PI;
+const RAD = Math.PI / 180;
+export const AU_KM = 149_597_870.7;
+const SOLAR_MU = 1.32712440018e11; // km³/s², IAU/JPL solar gravitational parameter
 
-// Масштаб: 1 а.е. = 30 единиц в сцене (немного увеличил для наглядности)
-export const AU_SCALE = 30; 
-
-// Решение уравнения Кеплера
-function solveKepler(M: number, e: number, tol = 1e-7): number {
-  let E = M;
-  for (let i = 0; i < 10; i++) {
-    const dE = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
-    E -= dE;
-    if (Math.abs(dE) < tol) break;
-  }
-  return E;
+export function normalizeAngle(angle: number): number {
+  return ((angle + Math.PI) % TAU + TAU) % TAU - Math.PI;
 }
 
-// Расчёт позиции
-export function getPlanetPosition(data: PlanetOrbitData, daysSinceJ2000: number): THREE.Vector3 {
-  /* среднее движение (угловая скорость в радианах/сутки) */
-  const n = (2 * Math.PI) / data.period; 
-  /* средняя аномалия в эпоху J2000 */
-  const M0 = ((data.meanLongJ2000 - data.periapsis - data.node) * Math.PI) / 180;
-  /* средняя аномалия */
-  const M = M0 + n * daysSinceJ2000;
+export function solveKepler(meanAnomaly: number, eccentricity: number): number {
+  if (!Number.isFinite(meanAnomaly) || !Number.isFinite(eccentricity) || eccentricity < 0 || eccentricity >= 1) {
+    throw new RangeError('Expected a finite anomaly and an elliptic orbit (0 ≤ e < 1).');
+  }
+  const M = normalizeAngle(meanAnomaly);
+  let E = eccentricity < 0.8 ? M : (M < 0 ? -Math.PI : Math.PI);
+  for (let iteration = 0; iteration < 50; iteration++) {
+    const step = (E - eccentricity * Math.sin(E) - M) / (1 - eccentricity * Math.cos(E));
+    E -= step;
+    if (Math.abs(step) < 1e-12) return E;
+  }
+  throw new Error('Kepler solver did not converge.');
+}
 
-  /* эксцентрическая аномалия */
-  const E = solveKepler(M, data.e);
-  /* истинная аномалия (ν) */
-  const nu = 2 * Math.atan2(
-    Math.sqrt(1 + data.e) * Math.sin(E / 2),
-    Math.sqrt(1 - data.e) * Math.cos(E / 2)
-  );
+export function getMeanAnomaly(data: PlanetOrbitData, daysSinceJ2000: number): number {
+  return normalizeAngle((data.meanLongJ2000 - data.longitudeOfPerihelion) * RAD + TAU * daysSinceJ2000 / data.period);
+}
 
-  /* гелиоцентрическое расстояние */
-  const r = data.a * (1 - data.e * data.e) / (1 + data.e * Math.cos(nu));
+export function getPlanetPosition(data: PlanetOrbitData, daysSinceJ2000: number, target = new Vector3()): Vector3 {
+  const E = solveKepler(getMeanAnomaly(data, daysSinceJ2000), data.e);
+  const xOrbit = data.a * (Math.cos(E) - data.e);
+  const yOrbit = data.a * Math.sqrt(1 - data.e * data.e) * Math.sin(E);
+  return perifocalToScene(xOrbit, yOrbit, data.i, data.node, data.longitudeOfPerihelion - data.node, target).multiplyScalar(AU_SCALE);
+}
 
-  /* наклонение орбиты к плоскости отсчёта (эклиптике) */
-  const iRad = (data.i * Math.PI) / 180;
-  /* долгота восходящего узла (Ω) */
-  const nodeRad = (data.node * Math.PI) / 180;
-  /* аргумент широты */
-  const w = (data.periapsis * Math.PI) / 180 + nu;
+/** Classical perifocal coordinates → right-handed, Y-up J2000 ecliptic scene. */
+export function perifocalToScene(xOrbit: number, yOrbit: number, inclinationDeg: number, nodeDeg: number, argumentDeg: number, target = new Vector3()): Vector3 {
+  const w = argumentDeg * RAD;
+  const node = nodeDeg * RAD;
+  const inclination = inclinationDeg * RAD;
+  const x = (Math.cos(w) * Math.cos(node) - Math.sin(w) * Math.sin(node) * Math.cos(inclination)) * xOrbit
+    + (-Math.sin(w) * Math.cos(node) - Math.cos(w) * Math.sin(node) * Math.cos(inclination)) * yOrbit;
+  const z = (Math.cos(w) * Math.sin(node) + Math.sin(w) * Math.cos(node) * Math.cos(inclination)) * xOrbit
+    + (-Math.sin(w) * Math.sin(node) + Math.cos(w) * Math.cos(node) * Math.cos(inclination)) * yOrbit;
+  const y = Math.sin(w) * Math.sin(inclination) * xOrbit + Math.cos(w) * Math.sin(inclination) * yOrbit;
+  // Reflect ecliptic Y so north is +Y in Three.js's right-handed frame.
+  return target.set(x, y, -z);
+}
 
-  const x = r * (Math.cos(nodeRad) * Math.cos(w) - Math.sin(nodeRad) * Math.sin(w) * Math.cos(iRad));
-  const z = r * (Math.sin(nodeRad) * Math.cos(w) + Math.cos(nodeRad) * Math.sin(w) * Math.cos(iRad));
-  const y = r * Math.sin(w) * Math.sin(iRad);
-
-  return new THREE.Vector3(x, y, z).multiplyScalar(AU_SCALE);
+export function getOrbitalSpeedKmS(data: PlanetOrbitData, radiusAU: number): number {
+  return Math.sqrt(SOLAR_MU / AU_KM * (2 / radiusAU - 1 / data.a));
 }
