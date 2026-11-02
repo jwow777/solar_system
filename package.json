@@ -1,6 +1,6 @@
 {
   "name": "solar_system",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "engines": { "node": ">=22.20.0" },
   "description": "Атлас Солнечной системы: интерактивная 3D-модель планет и спутников на Three.js",

@@ -81,4 +81,11 @@ describe('saved preferences', () => {
     expect(result.settings.sunColor).toBe('#fff5e0');
     expect(result.settings.showOrbits).toBe(false);
   });
+
+  it('restores a valid time step and keeps the default for old or invalid settings', () => {
+    const read = (timeStepDays?: unknown) => loadPreferences({ getItem: () => JSON.stringify({ version: 1, settings: { timeStepDays } }) });
+    expect(read(30).settings.timeStepDays).toBe(30);
+    expect(read(1).settings.timeStepDays).toBe(1);
+    for (const value of [undefined, '30', 0, -7, 3.5, 366]) expect(read(value).settings.timeStepDays).toBe(10);
+  });
 });

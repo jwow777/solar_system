@@ -1,8 +1,10 @@
+export const TIME_STEP_DAYS: readonly number[] = [1, 7, 10, 30, 365];
 export const defaultSettings = {
   sunIntensity: 1.2, ambientIntensity: 0.12, sunColor: '#fff5e0',
   bloomStrength: 0.3, bloomRadius: 1, bloomThreshold: 0.335,
   bloomTint: '#ffffaa', planetScale: 1, showOrbits: true, exposure: 0.8,
   realisticSizes: false, realTime: false,
+  timeStepDays: 10,
 };
 export type SceneSettings = typeof defaultSettings;
 export const SETTINGS_KEY = 'solar-system-atlas.settings.v1';
@@ -32,6 +34,7 @@ export function loadPreferences(storage?: Pick<Storage, 'getItem'>) {
       if (typeof saved.settings?.[key] === 'boolean') settings[key] = saved.settings[key];
     }
     if (typeof saved.timeScale === 'number' && Number.isFinite(saved.timeScale)) timeScale = Math.min(50, Math.max(0, saved.timeScale));
+    if (typeof saved.settings?.timeStepDays === 'number' && TIME_STEP_DAYS.includes(saved.settings.timeStepDays)) settings.timeStepDays = saved.settings.timeStepDays;
   } catch { /* Storage may be disabled or contain an older/corrupt value. */ }
   return { settings, timeScale };
 }
