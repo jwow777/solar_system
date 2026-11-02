@@ -3,9 +3,10 @@ import { PerspectiveCamera } from 'three';
 import sharp from 'sharp';
 import { PLANETS_DATA } from '../../src/constants/planetsData';
 import { getPlanetPosition } from '../../src/utils/orbitPhysics';
-import { sceneBounds, waitForCamera } from './helpers';
+import { RENDER_TIMEOUT, sceneBounds, waitForCamera } from './helpers';
 
-test('orbit hover brightens the line and restores transparency on pointer leave', async ({ page }) => {
+test('orbit hover brightens the line and restores transparency on pointer leave', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
   await page.goto('');
   await page.getByRole('button', { name: 'Приостановить симуляцию' }).click();
   await expect(page.locator('.loading-status')).toBeHidden({ timeout: 30_000 });
@@ -25,18 +26,29 @@ test('orbit hover brightens the line and restores transparency on pointer leave'
   expect(points.length).toBeGreaterThan(0);
   const point = points[Math.floor(points.length / 2)];
   const clip = { x: Math.floor(point.x) - 6, y: Math.floor(point.y) - 6, width: 12, height: 12 };
+  const measurements: { phase: string; brightness: number; durationMs: number }[] = [];
+  let phase = 'normal';
   const brightness = async () => {
-    const { channels } = await sharp(await page.screenshot({ clip })).stats();
-    return (channels[0].mean + channels[1].mean + channels[2].mean) / 3;
+    const started = Date.now();
+    const { channels } = await sharp(await page.screenshot({ clip, timeout: RENDER_TIMEOUT })).stats();
+    const value = (channels[0].mean + channels[1].mean + channels[2].mean) / 3;
+    measurements.push({ phase, brightness: value, durationMs: Date.now() - started });
+    return value;
   };
-  await page.mouse.move(40, 40);
-  const normal = await brightness();
-  await page.mouse.move(point.x, point.y);
-  await expect(page.locator('.planet-tooltip')).toHaveText(/^Орбита: /);
-  await expect.poll(brightness).toBeGreaterThan(normal + 1);
-  await page.mouse.move(40, 40);
-  await expect(page.locator('.planet-tooltip')).not.toHaveClass(/visible/);
-  await expect.poll(brightness).toBeLessThan(normal + 1);
+  try {
+    await page.mouse.move(40, 40);
+    const normal = await brightness();
+    phase = 'hover';
+    await page.mouse.move(point.x, point.y);
+    await expect(page.locator('.planet-tooltip')).toHaveText(/^Орбита: /);
+    await expect.poll(brightness, { timeout: RENDER_TIMEOUT, message: 'The rendered orbit must brighten on hover' }).toBeGreaterThan(normal + 1);
+    phase = 'restored';
+    await page.mouse.move(40, 40);
+    await expect(page.locator('.planet-tooltip')).not.toHaveClass(/visible/);
+    await expect.poll(brightness, { timeout: RENDER_TIMEOUT, message: 'The rendered orbit must return to its original opacity' }).toBeLessThan(normal + 1);
+  } finally {
+    await testInfo.attach('orbit-brightness.json', { body: JSON.stringify({ clip, measurements }, null, 2), contentType: 'application/json' });
+  }
 });
 
 test('the renamed atlas starts at the current UTC date on every visit', async ({ page }) => {

@@ -61,3 +61,61 @@ for (const aspect of [16 / 9, 390 / 844]) it('fits the entire system in overview
     expect(frustum.containsPoint(getPlanetPosition(planet, planet.period * i / 16))).toBe(true);
   }
 });
+
+it('returns from overview to a free camera view after resizing', () => {
+  const camera = new PerspectiveCamera(45, 1, 0.02, 22000);
+  camera.position.set(12, 34, 56);
+  const controls = { target: new Vector3(2, 3, 4), minDistance: 0.2, maxDistance: 18000 };
+  const controller = new CameraController(camera, controls);
+  const original = camera.position.clone();
+  const target = controls.target.clone();
+  expect(controller.toggleOverview()).toBe(true);
+  controller.update(1);
+  controller.setViewport(10, 60, 370, 350, 390, 500);
+  controller.update(1);
+  expect(controller.toggleOverview()).toBe(false);
+  controller.update(1);
+  expect(camera.position.distanceTo(original)).toBeLessThan(1e-10);
+  expect(controls.target.distanceTo(target)).toBeLessThan(1e-10);
+  expect(camera.near).toBe(0.02);
+  expect(camera.far).toBe(22000);
+  expect(controls.minDistance).toBe(0.2);
+  expect(controls.maxDistance).toBe(18000);
+});
+
+it('restores a manually rotated and zoomed body view at its new position and scale', () => {
+  const camera = new PerspectiveCamera(45, 1, 0.01, 20000);
+  const controls = { target: new Vector3(), minDistance: 0, maxDistance: 15000 };
+  const controller = new CameraController(camera, controls);
+  const mesh = new Mesh(new SphereGeometry(1), new MeshBasicMaterial());
+  mesh.position.set(100, 0, 0);
+  controller.focus({ id: 'earth', kind: 'planet', mesh, focusObject: mesh, radius: 1, color: '#fff' });
+  controller.update(1);
+  const offset = new Vector3(-8, 5, 12);
+  camera.position.copy(mesh.position).add(offset);
+  expect(controller.toggleOverview()).toBe(true);
+  controller.update(1);
+  mesh.position.set(150, 10, 5);
+  mesh.scale.setScalar(2);
+  expect(controller.toggleOverview()).toBe(false);
+  controller.update(1);
+  expect(camera.position.clone().sub(mesh.position).distanceTo(offset.clone().multiplyScalar(2))).toBeLessThan(1e-10);
+  expect(controls.target.distanceTo(mesh.position)).toBeLessThan(1e-10);
+  mesh.position.x += 10;
+  controller.update(1 / 60);
+  expect(camera.position.clone().sub(mesh.position).distanceTo(offset.clone().multiplyScalar(2))).toBeLessThan(1e-10);
+  expect(camera.near).toBe(0.02);
+});
+
+it('can return before the overview transition finishes and repeat the round trip', () => {
+  const camera = new PerspectiveCamera(45, 1, 0.01, 20000);
+  camera.position.set(0, 30, 60);
+  const controls = { target: new Vector3(), minDistance: 0.1, maxDistance: 15000 };
+  const controller = new CameraController(camera, controls);
+  const original = camera.position.clone();
+  for (let i = 0; i < 2; i++) {
+    controller.toggleOverview(); controller.update(0.1);
+    controller.toggleOverview(); controller.update(1);
+    expect(camera.position.distanceTo(original)).toBeLessThan(1e-10);
+  }
+});

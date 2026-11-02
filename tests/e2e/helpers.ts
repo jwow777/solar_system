@@ -1,5 +1,8 @@
 import { expect, type Page } from '@playwright/test';
 
+// SwiftShader on CI can take longer than the default 5s matcher budget to capture a frame.
+export const RENDER_TIMEOUT = 30_000;
+
 export async function waitForCamera(page: Page) {
   await expect(page.locator('canvas')).toHaveAttribute('aria-busy', 'false', { timeout: 20_000 });
 }

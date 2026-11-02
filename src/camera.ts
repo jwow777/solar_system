@@ -10,6 +10,18 @@ export function focusDistance(radius: number, fov: number, aspect: number): numb
   return radius / Math.sin(Math.min(vertical, horizontal)) * 1.35;
 }
 
+interface CameraView {
+  body: BodyInstance | null;
+  position: Vector3;
+  target: Vector3;
+  direction: Vector3;
+  zoom: number;
+  minDistance: number;
+  maxDistance: number;
+  near: number;
+  far: number;
+}
+
 export class CameraController {
   private body: BodyInstance | null = null;
   private progress = 1;
@@ -25,6 +37,8 @@ export class CameraController {
   private delta = new Vector3();
   private viewport: { width: number; height: number; fullHeight: number } | null = null;
   private isOverview = false;
+  private previousView: CameraView | null = null;
+  private focusZoom = 1;
 
   constructor(
     private camera: PerspectiveCamera,
@@ -48,6 +62,9 @@ export class CameraController {
 
   focus(body: BodyInstance) {
     this.isOverview = false;
+    this.previousView = null;
+    this.focusZoom = 1;
+    this.direction.set(1, 0.35, 1).normalize();
     this.body = body;
     body.focusObject.getWorldPosition(this.lastPosition);
     this.refit();
@@ -58,7 +75,7 @@ export class CameraController {
     if (!this.body) return;
     this.body.mesh.getWorldScale(this.worldScale);
     const radius = this.body.radius * Math.max(this.worldScale.x, this.worldScale.y, this.worldScale.z);
-    const distance = this.fitDistance(radius);
+    const distance = Math.max(radius * 1.15, this.fitDistance(radius) * this.focusZoom);
     if (Math.abs(distance - this.distance) > Math.max(1e-12, distance * 1e-6)) this.begin();
     this.distance = distance;
     this.controls.minDistance = radius * 1.15;
@@ -67,6 +84,23 @@ export class CameraController {
   }
 
   overview() {
+    if (!this.isOverview) {
+      const direction = this.camera.position.clone().sub(this.controls.target);
+      let zoom = 1;
+      if (this.body) {
+        this.body.focusObject.getWorldPosition(this.worldPosition);
+        direction.copy(this.camera.position).sub(this.worldPosition);
+        this.body.mesh.getWorldScale(this.worldScale);
+        const radius = this.body.radius * Math.max(this.worldScale.x, this.worldScale.y, this.worldScale.z);
+        zoom = direction.length() / this.fitDistance(radius);
+      }
+      this.previousView = {
+        body: this.body, position: this.camera.position.clone(), target: this.controls.target.clone(),
+        direction: direction.normalize(), zoom,
+        minDistance: this.controls.minDistance, maxDistance: this.controls.maxDistance,
+        near: this.camera.near, far: this.camera.far,
+      };
+    }
     this.isOverview = true;
     this.body = null;
     const extent = Math.max(...PLANETS_DATA.map(p => p.a * (1 + p.e))) * AU_SCALE;
@@ -79,6 +113,30 @@ export class CameraController {
     this.lookAt.set(0, 0, 0);
     this.controls.minDistance = 0.1;
     this.begin();
+  }
+
+  toggleOverview(): boolean {
+    if (!this.isOverview || !this.previousView) { this.overview(); return true; }
+    const view = this.previousView;
+    this.previousView = null;
+    this.isOverview = false;
+    this.body = view.body;
+    this.controls.minDistance = view.minDistance;
+    this.controls.maxDistance = view.maxDistance;
+    this.camera.near = view.near;
+    this.camera.far = view.far;
+    this.camera.updateProjectionMatrix();
+    if (this.body) {
+      this.direction.copy(view.direction);
+      this.focusZoom = view.zoom;
+      this.body.focusObject.getWorldPosition(this.lastPosition);
+      this.refit();
+    } else {
+      this.destination.copy(view.position);
+      this.lookAt.copy(view.target);
+    }
+    this.begin();
+    return false;
   }
 
   cancelTransition() {

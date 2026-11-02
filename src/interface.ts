@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { BODY_CATALOG } from './catalog';
 import { simulationDate, DAY_MS, J2000_MS } from './simulation';
-import { defaultSettings, savePreferences, type SceneSettings } from './settings';
+import { defaultSettings, savePreferences, TIME_STEP_DAYS, type SceneSettings } from './settings';
 import { bodyAvatar, bodySubtitle, icon } from './uiVisuals';
 import { applyDisplayScale } from './scale';
 import type { LoadingStatus } from './textures';
@@ -77,6 +77,7 @@ export function setupInterface(options: InterfaceOptions) {
   overview.className = 'header-action overview-btn';
   overview.innerHTML = icon('overview') + '<span class="action-label">Обзор</span>';
   overview.setAttribute('aria-label', 'Общий обзор');
+  overview.setAttribute('aria-pressed', 'false');
   overview.title = 'Общий обзор';
 
   const settingsContainer = document.createElement('details');
@@ -233,8 +234,28 @@ export function setupInterface(options: InterfaceOptions) {
   let infoOpen = false;
   let selected: BodyId | null = null;
 
+  // Mobile browsers can resize only the visual viewport when the keyboard opens.
+  const visualViewport = window.visualViewport;
+  function updateVisualViewport() {
+    const unscaled = !visualViewport || Math.abs(visualViewport.scale - 1) < 0.01;
+    const inset = visualViewport && unscaled ? Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop) : 0;
+    document.body.style.setProperty('--keyboard-inset', inset + 'px');
+    document.body.style.setProperty('--visual-viewport-top', unscaled ? (visualViewport?.offsetTop ?? 0) + 'px' : '0px');
+  }
+  visualViewport?.addEventListener('resize', updateVisualViewport, { signal });
+  visualViewport?.addEventListener('scroll', updateVisualViewport, { signal });
+  window.addEventListener('resize', updateVisualViewport, { signal });
+  updateVisualViewport();
+  search.addEventListener('focus', () => {
+    if (window.matchMedia('(max-width: 1000px)').matches) document.body.classList.add('catalog-searching');
+  }, { signal });
+
   function setCatalogOpen(open: boolean) {
     catalogOpen = open;
+    if (!open) {
+      document.body.classList.remove('catalog-searching');
+      if (catalog.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    }
     document.body.classList.toggle('catalog-open', open);
     browse.setAttribute('aria-expanded', String(open));
   }
@@ -317,7 +338,23 @@ export function setupInterface(options: InterfaceOptions) {
   const sceneViewport = document.createElement('div');
   sceneViewport.className = 'scene-viewport';
   sceneViewport.setAttribute('aria-hidden', 'true');
-  sceneViewport.innerHTML = '<div class="scene-hint">' + icon('mouse') + '<span>Перетаскивайте для обзора<span class="hint-separator">·</span>Колесо — масштаб</span></div>';
+  const coarsePointer = window.matchMedia('(pointer: coarse)');
+  let touchHint: boolean | undefined;
+  function setInputHint(touch: boolean) {
+    if (touchHint === touch) return;
+    touchHint = touch;
+    const rotate = touch ? 'Одним пальцем — вращение' : 'Перетаскивайте для вращения';
+    const zoom = touch ? 'Двумя — масштаб и сдвиг' : 'Колесо — масштаб';
+    sceneViewport.innerHTML = '<div class="scene-hint" data-input="' + (touch ? 'touch' : 'mouse') + '">' + icon(touch ? 'touch' : 'mouse')
+      + '<span class="hint-actions"><span>' + rotate + '</span><span class="hint-separator">·</span><span>' + zoom + '</span></span></div>';
+    catalogHint.innerHTML = icon(touch ? 'touch' : 'mouse') + '<span>Выберите объект</span>';
+    renderer.domElement.setAttribute('aria-description', rotate + '. ' + zoom + '.');
+  }
+  setInputHint(coarsePointer.matches);
+  coarsePointer.addEventListener('change', () => setInputHint(coarsePointer.matches), { signal });
+  renderer.domElement.addEventListener('pointerdown', event => {
+    if (event.pointerType) setInputHint(event.pointerType !== 'mouse');
+  }, { signal });
 
   const dock = document.createElement('section');
   dock.className = 'control-dock glass-panel';
@@ -344,9 +381,27 @@ export function setupInterface(options: InterfaceOptions) {
     button.addEventListener('click', action, { signal });
     transport.appendChild(button); return button;
   }
-  timeButton('Назад на 10 дней', icon('back') + '<span>10д</span>', () => options.timeControl.step(-10));
+  const backward = timeButton('Назад', icon('back'), () => options.timeControl.step(-settings.timeStepDays));
   const play = timeButton('Приостановить симуляцию', icon('pause'), () => { options.timeControl.togglePlay(); update(); }, 'play-button');
-  timeButton('Вперёд на 10 дней', '<span>10д</span>' + icon('forward'), () => options.timeControl.step(10));
+  const forward = timeButton('Вперёд', icon('forward'), () => options.timeControl.step(settings.timeStepDays));
+
+  const stepField = document.createElement('label');
+  stepField.className = 'time-step-control';
+  stepField.innerHTML = '<span class="eyebrow">ШАГ ВРЕМЕНИ</span>';
+  const stepSelect = document.createElement('select');
+  stepSelect.className = 'time-step-select';
+  stepSelect.setAttribute('aria-label', 'Шаг времени');
+  const stepText = (days: number) => days + ' ' + (days === 1 ? 'день' : 'дней');
+  for (const days of TIME_STEP_DAYS) {
+    const option = document.createElement('option');
+    option.value = String(days); option.textContent = stepText(days);
+    stepSelect.appendChild(option);
+  }
+  stepSelect.addEventListener('change', () => {
+    const days = Number(stepSelect.value);
+    if (TIME_STEP_DAYS.includes(days)) { settings.timeStepDays = days; persist(); update(); }
+  }, { signal });
+  stepField.appendChild(stepSelect);
 
   const speedBlock = document.createElement('div');
   speedBlock.className = 'speed-control';
@@ -358,7 +413,7 @@ export function setupInterface(options: InterfaceOptions) {
   const speedButtons = [0.1, 1, 10].map(rate => {
     const button = document.createElement('button');
     button.className = 'speed-preset';
-    button.textContent = rate.toLocaleString('ru') + '×';
+    button.textContent = rate.toLocaleString('ru');
     button.setAttribute('aria-label', 'Скорость ' + rate.toLocaleString('ru') + ' дн/сек');
     button.addEventListener('click', () => {
       state.timeScale = rate; syncControls.forEach(sync => sync()); persist(); update();
@@ -367,9 +422,9 @@ export function setupInterface(options: InterfaceOptions) {
   });
   const realTimeBadge = document.createElement('span');
   realTimeBadge.className = 'real-time-badge';
-  realTimeBadge.textContent = '1× · реальное время';
+  realTimeBadge.textContent = 'Время 1:1';
   speedBlock.append(speedLabel, presets, realTimeBadge);
-  dock.append(dateLabel, transport, speedBlock);
+  dock.append(dateLabel, transport, stepField, speedBlock);
 
   const loading = document.createElement('div');
   loading.className = 'loading-status glass-panel';
@@ -389,11 +444,11 @@ export function setupInterface(options: InterfaceOptions) {
     if (Number.isFinite(milliseconds)) options.timeControl.setDays((milliseconds - J2000_MS) / DAY_MS);
     update();
   }, { signal });
-  browse.addEventListener('click', () => {
+  browse.addEventListener('click', event => {
     settingsContainer.open = false;
     if (document.body.classList.contains('panel-open')) { options.browse(); setCatalogOpen(true); }
     else setCatalogOpen(!catalogOpen);
-    if (catalogOpen) search.focus({ preventScroll: true });
+    if (catalogOpen && event.detail === 0) search.focus({ preventScroll: true });
   }, { signal });
   overview.addEventListener('click', () => {
     settingsContainer.open = false; search.value = ''; activeCategory = 'major'; filter();
@@ -405,6 +460,11 @@ export function setupInterface(options: InterfaceOptions) {
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && settingsContainer.open) {
       event.preventDefault(); event.stopPropagation(); settingsContainer.open = false; settingsSummary.focus();
+      return;
+    }
+    if (event.key === 'Escape' && catalogOpen && window.matchMedia('(max-width: 1000px)').matches) {
+      event.preventDefault(); event.stopPropagation(); setCatalogOpen(false); browse.focus({ preventScroll: true });
+      return;
     }
     const typing = event.target instanceof HTMLElement && (event.target.matches('input, textarea, select') || event.target.isContentEditable);
     if (((event.ctrlKey || event.metaKey) && (event.code === 'KeyK' || event.key.toLowerCase() === 'k')) || (!typing && event.key === '/')) {
@@ -415,8 +475,17 @@ export function setupInterface(options: InterfaceOptions) {
   let displayedDate = '';
   let displayedPaused: boolean | undefined;
   let displayedSpeed = NaN;
+  let displayedStep = NaN;
   let displayedRealTime: boolean | undefined;
   function update() {
+    if (displayedStep !== settings.timeStepDays) {
+      displayedStep = settings.timeStepDays;
+      stepSelect.value = String(settings.timeStepDays);
+      backward.title = 'Назад на ' + stepText(settings.timeStepDays);
+      forward.title = 'Вперёд на ' + stepText(settings.timeStepDays);
+      backward.setAttribute('aria-label', backward.title);
+      forward.setAttribute('aria-label', forward.title);
+    }
     if (displayedPaused !== state.isPaused || displayedRealTime !== settings.realTime) {
       displayedPaused = state.isPaused;
       play.innerHTML = icon(state.isPaused ? 'play' : 'pause');
@@ -452,6 +521,11 @@ export function setupInterface(options: InterfaceOptions) {
     element: dock,
     sceneElement: sceneViewport,
     update,
+    setOverview(active: boolean) {
+      overview.setAttribute('aria-pressed', String(active));
+      overview.title = active ? 'Вернуться к предыдущему виду' : 'Общий обзор';
+      overview.innerHTML = icon(active ? 'back' : 'overview') + '<span class="action-label">' + (active ? 'Назад' : 'Обзор') + '</span>';
+    },
     setInfoOpen(open: boolean) {
       if (open && !infoOpen) { catalogWasOpen = catalogOpen; setCatalogOpen(false); }
       else if (!open && infoOpen && catalogWasOpen) { setCatalogOpen(true); catalogWasOpen = false; }
@@ -476,7 +550,9 @@ export function setupInterface(options: InterfaceOptions) {
     },
     dispose() {
       header.remove(); catalog.remove(); sceneViewport.remove(); dock.remove(); loading.remove();
-      document.body.classList.remove('catalog-open', 'realistic-sizes');
+      document.body.classList.remove('catalog-open', 'catalog-searching', 'realistic-sizes');
+      document.body.style.removeProperty('--keyboard-inset');
+      document.body.style.removeProperty('--visual-viewport-top');
     },
   };
 }

@@ -25,7 +25,12 @@ export function createPlanetPanel(state: SimulationState, signal: AbortSignal, o
   content.className = 'planet-panel-content';
   content.tabIndex = 0;
   content.setAttribute('aria-label', 'Сведения об объекте');
-  panel.append(closeButton, content);
+  const toolbar = document.createElement('div');
+  toolbar.className = 'planet-panel-toolbar';
+  const topline = document.createElement('div');
+  topline.className = 'card-topline';
+  toolbar.append(topline, closeButton);
+  panel.append(toolbar, content);
   document.body.append(tooltip, panel);
   let current: BodyId | null = null;
   let returnFocus: HTMLElement | null = null;
@@ -93,8 +98,8 @@ export function createPlanetPanel(state: SimulationState, signal: AbortSignal, o
     const kind = BODY_CATALOG.find(body => body.id === id)!.kind;
     const kindLabel = { star: 'ЗВЕЗДА', planet: 'ПЛАНЕТА', dwarf: 'КАРЛИКОВАЯ ПЛАНЕТА', moon: 'СПУТНИК' }[kind];
     const texture = moonTextureCredits.find(source => source.id === id);
+    topline.innerHTML = '<span class="eyebrow">В ФОКУСЕ</span><span class="object-kind">' + kindLabel + '</span>';
     content.innerHTML = `
-      <div class="card-topline"><span class="eyebrow">В ФОКУСЕ</span><span class="object-kind">${kindLabel}</span></div>
       <div class="planet-panel-header">
         <div class="planet-title-group"><h2 class="planet-panel-name" id="planet-panel-title">${info.nameRu}</h2><p class="planet-panel-type">${info.type}</p></div>
         ${bodyAvatar(id, 'planet-avatar-large')}

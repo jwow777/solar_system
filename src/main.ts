@@ -43,6 +43,7 @@ function startApplication() {
   const meshBodies = new Map(system.bodies.map(body => [body.mesh as THREE.Object3D, body]));
   const targets = system.bodies.map(body => body.mesh);
   let selectedId: BodyId | null = null;
+  let overviewSelection: BodyId | null = null;
 
   function updatePhysics() {
     for (const planet of Object.values(system.planets)) {
@@ -67,10 +68,12 @@ function startApplication() {
     const body = bodies.get(id);
     if (!body) return;
     selectedId = id;
+    overviewSelection = null;
     updatePhysics();
     cameraController.focus(body);
     textures.select(id);
     ui.setSelected(id);
+    ui.setOverview(false);
     panel.open(id, keyboard);
   }
 
@@ -78,11 +81,22 @@ function startApplication() {
     system, state, settings: preferences.settings, bloomPass, renderer, signal,
     select,
     overview() {
-      selectedId = null;
-      cameraController.overview();
-      textures.select(null);
-      ui.setSelected(null);
-      panel.close(false);
+      const showingOverview = cameraController.toggleOverview();
+      if (showingOverview) {
+        overviewSelection = selectedId;
+        selectedId = null;
+        textures.select(null);
+        ui.setSelected(null);
+        panel.close(false);
+      } else {
+        selectedId = overviewSelection;
+        overviewSelection = null;
+        updatePhysics();
+        textures.select(selectedId);
+        ui.setSelected(selectedId);
+        if (selectedId) panel.open(selectedId);
+      }
+      ui.setOverview(showingOverview);
     },
     timeControl: {
       step(days) { state.simDays += days; updatePhysics(); panel.update(); ui.update(); },
