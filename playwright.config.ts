@@ -5,6 +5,9 @@ export default defineConfig({
   timeout: 30_000,
   workers: 1,
   forbidOnly: !!process.env.CI,
+  reporter: process.env.CI
+    ? [['list'], ['github'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/results.json' }]]
+    : [['list']],
   use: {
     baseURL: 'http://127.0.0.1:4173/solar_system/',
     headless: true,

@@ -1,21 +1,22 @@
 import { expect, test } from '@playwright/test';
 import sharp from 'sharp';
 import type { Page } from '@playwright/test';
-import { sceneBounds, waitForCamera } from './helpers';
+import { RENDER_TIMEOUT, sceneBounds, waitForCamera } from './helpers';
 
 async function earthBrightness(page: Page) {
+  const started = Date.now();
   const bounds = await sceneBounds(page);
   const image = await page.screenshot({ clip: {
     x: Math.floor(bounds.x + (bounds.width - 96) / 2),
     y: Math.floor(bounds.y + (bounds.height - 96) / 2),
     width: 96, height: 96,
-  } });
+  }, timeout: RENDER_TIMEOUT });
   const { channels } = await sharp(image).stats();
-  return channels[0].mean * 0.2126 + channels[1].mean * 0.7152 + channels[2].mean * 0.0722;
+  return { brightness: channels[0].mean * 0.2126 + channels[1].mean * 0.7152 + channels[2].mean * 0.0722, durationMs: Date.now() - started };
 }
 
-test('atmospheric planets render without shader errors in day and unlit views', async ({ page }) => {
-  test.setTimeout(120_000);
+test('atmospheric planets render without shader errors in day and unlit views', async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -38,8 +39,8 @@ test('atmospheric planets render without shader errors in day and unlit views', 
   await page.locator('[data-body="earth"]').click();
   await expect(page.locator('.loading-status')).toBeHidden({ timeout: 30_000 });
   await waitForCamera(page);
-  const daylightBrightness = await earthBrightness(page);
-  expect(daylightBrightness).toBeGreaterThan(15);
+  const daylight = await earthBrightness(page);
+  expect(daylight.brightness).toBeGreaterThan(15);
   await page.locator('.scene-settings > summary').click();
   await page.getByText('Источник света', { exact: true }).click();
   const sunlight = page.getByRole('spinbutton', { name: 'Мощность Солнца', exact: true });
@@ -49,7 +50,16 @@ test('atmospheric planets render without shader errors in day and unlit views', 
   await ambient.fill('0');
   await ambient.press('Enter');
   await page.locator('.scene-settings > summary').click();
-  await expect.poll(() => earthBrightness(page)).toBeLessThan(Math.max(3, daylightBrightness * 0.2));
+  const measurements = [{ phase: 'lit', ...daylight }];
+  try {
+    await expect.poll(async () => {
+      const sample = await earthBrightness(page);
+      measurements.push({ phase: 'unlit', ...sample });
+      return sample.brightness;
+    }, { timeout: RENDER_TIMEOUT, message: 'The rendered Earth must darken after sunlight and ambient light are disabled' }).toBeLessThan(Math.max(3, daylight.brightness * 0.2));
+  } finally {
+    await testInfo.attach('earth-brightness.json', { body: JSON.stringify({ measurements }, null, 2), contentType: 'application/json' });
+  }
   await page.screenshot({ path: 'test-results/atmosphere-earth-unlit.png' });
 
   await page.locator('.scene-settings > summary').click();

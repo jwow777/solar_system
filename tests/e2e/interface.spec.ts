@@ -181,6 +181,9 @@ test('the close button stays in its own toolbar while object details scroll', as
     await openCatalog(page);
     await page.locator('[data-body="earth"]').click();
     const close = page.getByRole('button', { name: 'Закрыть карточку объекта' });
+    await page.locator('.planet-panel').evaluate(async panel => {
+      await Promise.all(panel.getAnimations().map(animation => animation.finished));
+    });
     const before = (await close.boundingBox())!;
     const content = page.locator('.planet-panel-content');
     await content.evaluate(element => { element.scrollTop = element.scrollHeight; });
